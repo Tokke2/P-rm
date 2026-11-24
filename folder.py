@@ -1,71 +1,61 @@
-# Fil: folder.py — GUI för etikettgenerator med DYNAMISK anpassning
+# Fil: folder.py — GUI för etikettgenerator med dynamisk anpassning
 # © Copyright Rickard Längkvist {get_copyright_year()} - All rights reserved
-# Stöd för: SVG, EPS, PNG, JPG och andra bildformat
-# Kopplar ihop: Script/label.py och Script/logotyp.py
-# Export: PDF:er sparas i approtens undermapp 'export/'
+# Stöd för logotyper i PDF, SVG, EPS, AI, PNG, JPG, TIFF m.fl.
+# Kopplar ihop: Script/label.py, Script/logotyp.py, Script/verifikat.py
+#               och Script/settings_store.py
+# Export: PDF:er sparas i undermappen 'export/'
+
+from __future__ import annotations
 
 import os
+import re
+import subprocess
 import sys
 import tkinter as tk
-from tkinter import ttk, messagebox
-from pathlib import Path
 from datetime import datetime
+from pathlib import Path
+from tkinter import messagebox, ttk
 from typing import List, Optional
-from reportlab.pdfgen import canvas
+
+from reportlab.lib import colors
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.units import mm
-from reportlab.lib import colors
-from reportlab.pdfbase import pdfmetrics
-from reportlab.pdfbase.ttfonts import TTFont
-from ttkthemes import ThemedTk
-import subprocess
-import re
+from reportlab.pdfgen import canvas
 
-# === Importera moduler från Script-mappen ===
+# === Moduler i Script-mappen ===
 try:
     from Script import label as LabelModule
     from Script import logotyp as LogoModule
-    print("[Import] ✓ Script/label.py laddad")
-    print("[Import] ✓ Script/logotyp.py laddad")
-except ImportError as e:
-    try:
-        import label as LabelModule
-        import logotyp as LogoModule
-        print("[Import] ✓ Moduler laddade från samma mapp")
-    except ImportError:
-        print(f"[Import] ✗ Kunde inte importera moduler: {e}")
-        tk.Tk().withdraw()
-        messagebox.showerror(
-            "Importfel",
-            f"Kunde inte importera Script-moduler:\n{e}\n\n"
-            "Kontrollera att Script/label.py och Script/logotyp.py finns."
-        )
-        sys.exit(1)
+    from Script import settings_store as SettingsModule
+    from Script import verifikat as VerifikatModule
+except ImportError:
+    import label as LabelModule            # type: ignore[no-redef]
+    import logotyp as LogoModule            # type: ignore[no-redef]
+    import settings_store as SettingsModule  # type: ignore[no-redef]
+    import verifikat as VerifikatModule      # type: ignore[no-redef]
+
 
 # === Konstanter ===
-BINDER_SMALL_WIDTH  = 41 * mm
-BINDER_THICK_WIDTH  = 57 * mm
-BINDER_HEIGHT       = 64 * mm
-PDF_SIDE_MARGIN     = 10 * mm
-PDF_TOP_MARGIN      = 10 * mm
-PDF_SPACING         = 5 * mm
+BINDER_SMALL_WIDTH = 41 * mm
+BINDER_THICK_WIDTH = 57 * mm
+BINDER_HEIGHT = 64 * mm
+PDF_SIDE_MARGIN = 10 * mm
+PDF_TOP_MARGIN = 10 * mm
+PDF_SPACING = 5 * mm
 A4_WIDTH, A4_HEIGHT = A4
 
-# === Klipplinjer (skärmärken) ===
-CUT_LINE_COLOR = colors.grey   # Färg på streckade klipplinjer
-CUT_LINE_WIDTH = 0.3           # Tjocklek (pt)
-CUT_LINE_DASH  = (2, 2)        # Streckmönster (på, av) i pt
+CUT_LINE_COLOR = colors.grey
+CUT_LINE_WIDTH = 0.3
+CUT_LINE_DASH = (2, 2)
 
-# Månadsnamn (svenska, treställiga, versaler) för verifikat
-MONTHS_SE = ["JAN", "FEB", "MAR", "APR", "MAJ", "JUN",
-             "JUL", "AUG", "SEP", "OKT", "NOV", "DEC"]
-
-# Standard logotypmapp
+MONTHS_SE = VerifikatModule.MONTHS_SE
 DEFAULT_LOGO_FOLDER = Path(__file__).parent / "Logotyp"
+
+VALID_LABEL_TYPES = {"rygg_smal", "rygg_tjock", "index"}
 
 
 # ──────────────────────────────────────────────────────────
-# HJÄLPFUNKTIONER — Dynamisk copyright
+# HJÄLPFUNKTIONER
 # ──────────────────────────────────────────────────────────
 
 def get_copyright_year() -> int:
@@ -81,30 +71,38 @@ def get_copyright_notice() -> str:
     )
 
 
-# ──────────────────────────────────────────────────────────
-# EXPORTMAPP — delegerar till LabelModule
-# ──────────────────────────────────────────────────────────
-
 def _get_out_path(filename: str) -> Path:
-    """
-    Returnerar full sökväg för en PDF i export/-mappen.
+    """Returnerar full sökväg till en PDF i export/-mappen."""
+    return LabelModule.get_export_path(filename)
 
-    Delegerar till LabelModule.get_export_path() som skapar
-    mappen om den saknas.
 
-    Args:
-        filename: Filnamn (t.ex. "rygg_smal_Titel.pdf")
+def _grid_size(width: float, height: float) -> tuple[int, int]:
+    """Antal kolumner och rader som får plats på ett A4-ark."""
+    return VerifikatModule.grid_size(
+        width, height, A4, PDF_SIDE_MARGIN, PDF_TOP_MARGIN, PDF_SPACING
+    )
 
-    Returns:
-        Path till <approt>/export/<filename>
-    """
+
+def _bind_mousewheel(widget: tk.Widget) -> None:
+    """Mushjulsscroll för just denna widget (och dess barn)."""
+    def on_wheel(event) -> None:
+        widget.yview_scroll(int(-1 * (event.delta / 120)), "units")
+
+    def on_button(event) -> None:
+        widget.yview_scroll(-1 if event.num == 4 else 1, "units")
+
+    widget.bind("<MouseWheel>", on_wheel)
+    widget.bind("<Button-4>", on_button)
+    widget.bind("<Button-5>", on_button)
+
+
+def _create_root() -> tk.Tk:
+    """Skapar huvudfönstret, med ttkthemes om det är installerat."""
     try:
-        return LabelModule.get_export_path(filename)
-    except AttributeError:
-        # Fallback om äldre label.py saknar get_export_path
-        fallback = Path(__file__).parent / "export"
-        fallback.mkdir(parents=True, exist_ok=True)
-        return fallback / filename
+        from ttkthemes import ThemedTk
+        return ThemedTk(theme="arc")
+    except Exception:
+        return tk.Tk()
 
 
 # ──────────────────────────────────────────────────────────
@@ -112,50 +110,129 @@ def _get_out_path(filename: str) -> Path:
 # ──────────────────────────────────────────────────────────
 
 class LabelGUI:
-    def __init__(self, root: tk.Tk):
+    def __init__(self, root: tk.Tk, saved: Optional[dict] = None):
         self.root = root
+        self.saved = dict(saved) if saved is not None else SettingsModule.load_settings()
         self.root.title(f"Pärmetikett Generator {get_copyright_year()}")
-        self.root.geometry("900x600")
+        self.root.geometry(self.saved.get("window_geometry") or "1024x720")
+        self.root.minsize(880, 600)
 
-        # ── Tkinter-variabler ──────────────────────────────
-        self.type_var                 = tk.StringVar(value="rygg_smal")
-        self.auto_shrink              = tk.BooleanVar(value=True)
-        self.multi_label              = tk.BooleanVar(value=False)
-        self.text_size_var            = tk.IntVar(value=16)
-        self.antal_var                = tk.IntVar(value=1)
+        # ── Tkinter-variabler (värden från settings.json) ──
+        saved_type = self.saved.get("label_type", "rygg_smal")
+        self.type_var = tk.StringVar(
+            value=saved_type if saved_type in VALID_LABEL_TYPES else "rygg_smal"
+        )
+        self.auto_shrink = tk.BooleanVar(value=bool(self.saved.get("auto_shrink", True)))
+        self.multi_label = tk.BooleanVar(value=bool(self.saved.get("multi_label", False)))
+        self.cut_lines_var = tk.BooleanVar(value=bool(self.saved.get("cut_lines", True)))
 
-        # Verifikat
-        self.verifikat_year_var       = tk.IntVar(value=get_copyright_year())
-        self.verifikat_per_month_var  = tk.IntVar(value=2)
+        self.text_size_var = tk.IntVar(
+            value=self._clamp(self.saved.get("text_size", 16), 8, 32)
+        )
+        self.antal_var = tk.IntVar(
+            value=self._clamp(self.saved.get("label_count", 1), 1, 50)
+        )
 
-        # Klipplinjer
-        self.cut_lines_var            = tk.BooleanVar(value=True)
+        saved_year = self._clamp(
+            self.saved.get("verifikat_year", 0), 0, VerifikatModule.MAX_YEAR
+        )
+        self.verifikat_year_var = tk.IntVar(
+            value=saved_year or get_copyright_year()
+        )
+        self.verifikat_per_month_var = tk.IntVar(
+            value=self._clamp(
+                self.saved.get("verifikat_per_month", 2),
+                VerifikatModule.MIN_PER_MONTH,
+                VerifikatModule.MAX_PER_MONTH,
+            )
+        )
 
-        # Logotyp-marginal från toppen
-        try:
-            current     = LabelModule.get_current_settings()
-            initial_top = int(round(getattr(current, "logo_min_top_margin", 5)))
-        except Exception:
-            initial_top = 5
+        initial_top = self._clamp(self.saved.get("logo_top_px", 5), 0, 100)
         self.logo_top_px_var = tk.IntVar(value=initial_top)
 
         # ── Instance-attribut ──────────────────────────────
-        self.prepared_logo: object     = None
-        self.logo_path:     str | None = None
-        self.labels_text:   list       = []
+        self.prepared_logo: object = None
+        self.logo_kind: str = ""
+        self.labels_text: list = []
+
+        # Återställ senast använda logotyp (om den fortfarande finns).
+        self.logo_path: Optional[str] = self.saved.get("last_logo_path") or None
+        if self.logo_path and Path(self.logo_path).is_file():
+            self.prepared_logo = LabelModule.load_and_resize_logo(self.logo_path)
+            if self.prepared_logo:
+                suffix = Path(self.logo_path).suffix.lower()
+                self.logo_kind = (
+                    "vektor" if suffix in LogoModule.VECTOR_FORMATS else "bild"
+                )
+            else:
+                self.logo_path = None
+        else:
+            self.logo_path = None
 
         self.setup_gui()
         self.root.bind("<Control-n>", self.add_label_hotkey)
-        self.root.bind("<Command-n>",  self.add_label_hotkey)
+        self.root.bind("<Command-n>", self.add_label_hotkey)
+        self.root.protocol("WM_DELETE_WINDOW", self.on_close)
+
+    @staticmethod
+    def _clamp(value, minimum: int, maximum: int) -> int:
+        try:
+            return min(maximum, max(minimum, int(value)))
+        except (TypeError, ValueError):
+            return minimum
+
+    # ──────────────────────────────────────────────────────
+    # INSTÄLLNINGAR
+    # ──────────────────────────────────────────────────────
+
+    def current_settings(self) -> dict:
+        """Samlar ihop alla värden som ska sparas i settings.json."""
+        settings = dict(self.saved)
+        settings.update({
+            "label_type": self.type_var.get(),
+            "text_size": self.text_size_var.get(),
+            "auto_shrink": bool(self.auto_shrink.get()),
+            "multi_label": bool(self.multi_label.get()),
+            "cut_lines": bool(self.cut_lines_var.get()),
+            "logo_top_px": self.logo_top_px_var.get(),
+            "verifikat_year": self.verifikat_year_var.get(),
+            "verifikat_per_month": self.verifikat_per_month_var.get(),
+            "label_count": self.antal_var.get(),
+            "last_logo_path": self.logo_path or "",
+            "window_geometry": self.root.geometry(),
+        })
+        return settings
+
+    def save_settings(self) -> None:
+        SettingsModule.save_settings(
+            self.current_settings(), SettingsModule.SETTINGS_PATH
+        )
+
+    def on_close(self) -> None:
+        """Sparar inställningar innan fönstret stängs."""
+        self.on_logo_top_changed(save=False)
+        self.save_settings()
+        self.root.destroy()
+
+    def on_logo_top_changed(self, save: bool = True) -> None:
+        """Uppdaterar logotypens avstånd från toppen i LabelModule."""
+        value = self._clamp(self.logo_top_px_var.get(), 0, 100)
+        try:
+            settings = LabelModule.get_current_settings()
+            settings.logo_min_top_margin = float(value)
+            settings.logo_top_margin = float(value)
+            LabelModule.set_current_settings(settings)
+        except Exception as exc:
+            print(f"[Inställning] Kunde inte uppdatera logotypmarginal: {exc}")
+        if save:
+            self.save_settings()
 
     # ──────────────────────────────────────────────────────
     # GUI-UPPBYGGNAD
     # ──────────────────────────────────────────────────────
 
     def setup_gui(self) -> None:
-        """Bygger hela gränssnittet med Notebook, vänster och höger panel."""
-
-        # ── Notebook ──────────────────────────────────────
+        """Bygger gränssnittet: flikar, vänsterpanel och etikettlista."""
         self.notebook = ttk.Notebook(self.root)
         self.main_tab = ttk.Frame(self.notebook)
         self.help_tab = ttk.Frame(self.notebook)
@@ -163,50 +240,68 @@ class LabelGUI:
         self.notebook.add(self.help_tab, text="Hjälp")
         self.notebook.pack(fill="both", expand=True)
 
-        # ── Huvud-layout ──────────────────────────────────
-        left  = ttk.Frame(self.main_tab, padding=10)
+        # ── Scrollbar vänsterpanel (alla kontroller nås även på små skärmar) ──
+        left_outer = ttk.Frame(self.main_tab, width=330)
+        left_outer.pack(side="left", fill="y")
+        left_canvas = tk.Canvas(left_outer, highlightthickness=0, width=325)
+        left_scrollbar = ttk.Scrollbar(
+            left_outer, orient="vertical", command=left_canvas.yview
+        )
+        left = ttk.Frame(left_canvas, padding=10)
+        left.bind(
+            "<Configure>",
+            lambda event: left_canvas.configure(scrollregion=left_canvas.bbox("all")),
+        )
+        left_canvas.create_window((0, 0), window=left, anchor="nw")
+        left_canvas.configure(yscrollcommand=left_scrollbar.set)
+        left_canvas.pack(side="left", fill="both", expand=True)
+        left_scrollbar.pack(side="right", fill="y")
+        _bind_mousewheel(left_canvas)
+
         right = ttk.Frame(self.main_tab, padding=10)
-        left.pack(side="left",  fill="y")
         right.pack(side="right", expand=True, fill="both")
 
         # ══════════════════════════════════════════════════
         # VÄNSTER PANEL
         # ══════════════════════════════════════════════════
 
-        # ── Etikettyp ─────────────────────────────────────
         ttk.Label(left, text="Etikettyp", font=("", 10, "bold")).pack(
             anchor="w", pady=(0, 5))
-        for text, val in [
-            ("Smal (41×64 mm)",  "rygg_smal"),
+        for text, value in (
+            ("Smal (41×64 mm)", "rygg_smal"),
             ("Tjock (57×64 mm)", "rygg_tjock"),
-            ("Index (A4)",       "index"),
-        ]:
+            ("Index (A4)", "index"),
+        ):
             ttk.Radiobutton(
-                left, text=text, variable=self.type_var, value=val,
-                command=lambda: self.update_label_fields(True)
+                left, text=text, variable=self.type_var, value=value,
+                command=lambda: self.update_label_fields(True),
             ).pack(anchor="w")
 
         ttk.Separator(left, orient="horizontal").pack(fill="x", pady=10)
 
         # ── Logotyp ───────────────────────────────────────
-        ttk.Label(left, text="Logotyp", font=("", 10, "bold")).pack(
-            anchor="w", pady=(0, 5))
+        ttk.Label(left, text="Logotyp", font=("", 10, "bold")).pack(anchor="w")
+        ttk.Label(
+            left, text="PDF, SVG, EPS, AI, PNG, JPG …", foreground="gray"
+        ).pack(anchor="w", pady=(0, 5))
         ttk.Button(
-            left, text="📁 Välj logotyp (SVG/PNG/JPG)...",
-            command=self.choose_logo
+            left, text="📁 Välj logotyp (PDF/SVG/EPS…)",
+            command=self.choose_logo,
         ).pack(fill="x", pady=2)
         ttk.Button(
             left, text="📂 Öppna Logotyp-mappen",
-            command=self.open_logo_folder
+            command=self.open_logo_folder,
         ).pack(fill="x", pady=2)
 
         self.logo_label = ttk.Label(
-            left, text="Ingen logotyp vald",
-            wraplength=180, foreground="gray"
+            left, text="Ingen logotyp vald", wraplength=270, foreground="gray"
         )
         self.logo_label.pack(anchor="w", pady=(5, 0))
+        self.clear_logo_button = ttk.Button(
+            left, text="✕ Ta bort logotyp", command=self.clear_logo
+        )
+        self.clear_logo_button.pack(fill="x", pady=(4, 0))
 
-        # Logga från topp (px)
         logo_top_frame = ttk.Frame(left)
         logo_top_frame.pack(fill="x", pady=(8, 0))
         ttk.Label(logo_top_frame, text="Logga från topp (px):").pack(side="left")
@@ -218,6 +313,7 @@ class LabelGUI:
         self.logo_top_px_var.trace_add(
             "write", lambda *_: self.on_logo_top_changed()
         )
+        self._refresh_logo_label()
 
         ttk.Separator(left, orient="horizontal").pack(fill="x", pady=10)
 
@@ -229,242 +325,199 @@ class LabelGUI:
         size_frame = ttk.Frame(left)
         size_frame.pack(fill="x")
         ttk.Scale(
-            size_frame, from_=8, to=32,
-            variable=self.text_size_var, orient="horizontal"
+            size_frame, from_=8, to=32, variable=self.text_size_var,
+            orient="horizontal",
         ).pack(side="left", fill="x", expand=True)
         ttk.Label(size_frame, textvariable=self.text_size_var, width=3).pack(
             side="right")
 
         ttk.Checkbutton(
-            left, text="✓ Autoanpassa text",
-            variable=self.auto_shrink
+            left, text="Autoanpassa text", variable=self.auto_shrink
         ).pack(anchor="w", pady=2)
         ttk.Checkbutton(
-            left, text="✓ Flera etiketter",
-            variable=self.multi_label
+            left, text="Flera etiketter", variable=self.multi_label
         ).pack(anchor="w", pady=2)
         ttk.Checkbutton(
-            left, text="✓ Klipplinjer (kant till kant)",
-            variable=self.cut_lines_var
+            left, text="Klipplinjer (kant till kant)", variable=self.cut_lines_var
         ).pack(anchor="w", pady=2)
 
         ttk.Label(left, text="Antal etiketter:").pack(anchor="w", pady=(10, 0))
         self.antal_entry = ttk.Spinbox(
-            left, from_=1, to=50,
-            textvariable=self.antal_var, width=5,
-            command=lambda: self.update_label_fields(True)
+            left, from_=1, to=50, textvariable=self.antal_var, width=5,
+            command=lambda: self.update_label_fields(True),
         )
         self.antal_entry.pack(anchor="w", pady=(0, 10))
 
-        ttk.Separator(left, orient="horizontal").pack(fill="x", pady=10)
-
-        # ── Skapa PDF ─────────────────────────────────────
         ttk.Button(
-            left, text="📄 SKAPA PDF",
-            command=self.create_pdf,
-            style="Accent.TButton"
+            left, text="📄 SKAPA PDF", command=self.create_pdf,
+            style="Accent.TButton",
         ).pack(fill="x", pady=5)
-
-        # Knapp: Öppna export-mapp
         ttk.Button(
-            left, text="📤 Öppna Export-mappen",
-            command=self.open_export_folder
+            left, text="📤 Öppna Export-mappen", command=self.open_export_folder,
         ).pack(fill="x", pady=2)
 
         ttk.Separator(left, orient="horizontal").pack(fill="x", pady=10)
 
         # ── Verifikat ─────────────────────────────────────
-        ttk.Label(left, text="Verifikat", font=("", 10, "bold")).pack(
+        ttk.Label(left, text="Verifikat (hela året)", font=("", 10, "bold")).pack(
             anchor="w", pady=(0, 5))
 
-        verifikat_frame = ttk.Frame(left)
-        verifikat_frame.pack(fill="x", pady=2)
-        ttk.Label(verifikat_frame, text="År:").pack(side="left")
+        year_frame = ttk.Frame(left)
+        year_frame.pack(fill="x", pady=2)
+        ttk.Label(year_frame, text="År:").pack(side="left")
         ttk.Spinbox(
-            verifikat_frame, from_=1900, to=2200,
-            textvariable=self.verifikat_year_var, width=6
+            year_frame, from_=VerifikatModule.MIN_YEAR, to=VerifikatModule.MAX_YEAR,
+            textvariable=self.verifikat_year_var, width=7,
         ).pack(side="left", padx=(5, 10))
-        ttk.Label(verifikat_frame, text="Per mån:").pack(side="left")
+        ttk.Label(year_frame, text="Lappar/mån:").pack(side="left")
         ttk.Spinbox(
-            verifikat_frame, from_=1, to=12,
-            textvariable=self.verifikat_per_month_var, width=4
+            year_frame,
+            from_=VerifikatModule.MIN_PER_MONTH,
+            to=VerifikatModule.MAX_PER_MONTH,
+            textvariable=self.verifikat_per_month_var, width=4,
+            command=self._update_verifikat_info,
         ).pack(side="left", padx=(5, 0))
 
+        self.verifikat_info = ttk.Label(left, foreground="gray", wraplength=270)
+        self.verifikat_info.pack(anchor="w", pady=(2, 4))
+        self._update_verifikat_info()
+
         ttk.Button(
-            left, text="🧾 GENERERA VERIFIKAT",
-            command=self.create_verifikat_pdf
-        ).pack(fill="x", pady=5)
+            left, text="🧾 Skapa valt antal / månad",
+            command=self.create_verifikat_pdf,
+        ).pack(fill="x", pady=2)
+        ttk.Button(
+            left, text="🧾 Skapa BÅDA (1 & 2 per månad)",
+            command=self.create_verifikat_both,
+            style="Accent.TButton",
+        ).pack(fill="x", pady=4)
 
         # ══════════════════════════════════════════════════
-        # HÖGER PANEL — Etiketttext med scroll
+        # HÖGER PANEL — ETIKETTTEXT
         # ══════════════════════════════════════════════════
-        ttk.Label(right, text="Etiketttext", font=("", 10, "bold")).pack(
-            anchor="w")
+        ttk.Label(right, text="Etiketttext", font=("", 10, "bold")).pack(anchor="w")
 
         scroll_frame = ttk.Frame(right)
         scroll_frame.pack(fill="both", expand=True)
 
-        canvas_widget    = tk.Canvas(scroll_frame)
-        scrollbar        = ttk.Scrollbar(
-            scroll_frame, orient="vertical", command=canvas_widget.yview)
-        self.label_container = ttk.Frame(canvas_widget)
-
+        label_canvas = tk.Canvas(scroll_frame)
+        scrollbar = ttk.Scrollbar(
+            scroll_frame, orient="vertical", command=label_canvas.yview
+        )
+        self.label_container = ttk.Frame(label_canvas)
         self.label_container.bind(
             "<Configure>",
-            lambda e: canvas_widget.configure(
-                scrollregion=canvas_widget.bbox("all"))
+            lambda event: label_canvas.configure(
+                scrollregion=label_canvas.bbox("all")
+            ),
         )
-        canvas_widget.create_window(
-            (0, 0), window=self.label_container, anchor="nw")
-        canvas_widget.configure(yscrollcommand=scrollbar.set)
-
-        canvas_widget.pack(side="left",  fill="both", expand=True)
-        scrollbar.pack(    side="right", fill="y")
-
-        # Mushjulsscroll (Windows/macOS + Linux)
-        def _on_mousewheel(event):
-            canvas_widget.yview_scroll(
-                int(-1 * (event.delta / 120)), "units")
-
-        def _on_mousewheel_linux(event):
-            canvas_widget.yview_scroll(
-                -1 if event.num == 4 else 1, "units")
-
-        canvas_widget.bind_all("<MouseWheel>",  _on_mousewheel)
-        canvas_widget.bind_all("<Button-4>",    _on_mousewheel_linux)
-        canvas_widget.bind_all("<Button-5>",    _on_mousewheel_linux)
+        label_canvas.create_window((0, 0), window=self.label_container, anchor="nw")
+        label_canvas.configure(yscrollcommand=scrollbar.set)
+        label_canvas.pack(side="left", fill="both", expand=True)
+        scrollbar.pack(side="right", fill="y")
+        _bind_mousewheel(label_canvas)
 
         self.update_label_fields()
 
         # ══════════════════════════════════════════════════
         # HJÄLP-FLIK
         # ══════════════════════════════════════════════════
-        inkscape_status = (
-            "✓ Installerad" if LabelModule.find_inkscape()    else "✗ Ej hittad")
-        gs_status = (
-            "✓ Installerad" if LabelModule.find_ghostscript() else "✗ Ej hittad")
-
-        # Visa export-mapp i hjälptexten
-        try:
-            export_folder = LabelModule.get_export_folder()
-        except AttributeError:
-            export_folder = Path(__file__).parent / "export"
+        tools = LogoModule.check_tools()
+        tool_text = (
+            f"PyMuPDF (PDF): {'✓' if tools['pymupdf'] else '✗'}, "
+            f"Ghostscript: {'✓' if tools['ghostscript'] else '✗'}, "
+            f"Inkscape: {'✓' if tools['inkscape'] else '✗'}, "
+            f"cairosvg: {'✓' if tools['cairosvg'] else '✗'}"
+        )
 
         help_txt = tk.Text(self.help_tab, wrap="word", font=("", 10))
         help_txt.insert("1.0", f"""
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-  Pärmetikett Generator v2.0 (DYNAMISK)
-  {get_copyright_notice()}
+  Pärmetikett Generator — {get_copyright_notice()}
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-STÖDDA BILDFORMAT:
-  • SVG (kräver Inkscape)     {inkscape_status}
-  • EPS (kräver Ghostscript)  {gs_status}
-  • PNG, JPG, BMP, GIF, TIFF  ✓ Inbyggt stöd
-
-DYNAMISK ANPASSNING:
-  ✓ Logotyp skalas automatiskt oavsett originalstorlek
-  ✓ Text autoanpassas (fontstorlek & radbrytning)
-  ✓ Balanserad layout mellan logotyp och text
-  ✓ Dynamisk copyright som uppdateras varje år
-
-KLIPPLINJER:
-  ✓ Streckade skärmärken/snittlinjer i rutnät
-  ✓ Går kant till kant över hela arket
-  ✓ Etiketternas ram bevaras
-  ✓ Kan slås av/på i Inställningar
-
-LOGGA FRÅN TOPP (px):
-  ✓ Justera hur många px logotypen placeras från toppen
-  ✓ Logotypen centreras horisontellt inom marginalen
-  ✓ Gäller etiketter, verifikat och index
+LOGOTYPER:
+  • PDF (första sidan), SVG, EPS, AI och raster
+    (PNG, JPG, BMP, GIF, TIFF, WEBP)
+  • Vektorlogotyper renderas till högupplöst PNG och
+    centreras automatiskt på etiketten
+  • PDF: PyMuPDF → Ghostscript → Inkscape → pdftoppm
+  • SVG:  Inkscape → cairosvg → PyMuPDF
+  • EPS:  Ghostscript → Inkscape
+  • Konverteringsverktyg: {tool_text}
 
 ETIKETTYPER:
-  • Rygg Smal:  41 × 64 mm (för smala pärmar)
-  • Rygg Tjock: 57 × 64 mm (för tjocka pärmar)
+  • Rygg Smal:  41 × 64 mm
+  • Rygg Tjock: 57 × 64 mm
   • Index:      12 rader på A4 med numrering
 
-VERIFIKAT:
-  • Genererar verifikat-etiketter för valt år
-  • Standard: 2 lappar per månad (kan ändras 1–12)
-  • Layout per lapp (fet text):
-        VERIFIKAT
-        MÅN          (t.ex. JAN)
-        NR           (t.ex. 1)
-        ÅR           (t.ex. 2026)
-  • Använder vald etikettyp (smal/tjock) + vald logotyp
-  • Respekterar valda marginaler och autoanpassning
+VERIFIKAT — HELA ÅRET:
+  • "Skapa BÅDA (1 & 2 per månad)" gör två PDF:er:
+      verifikat_<år>_1_per_manad.pdf  (12 lappar)
+      verifikat_<år>_2_per_manad.pdf  (24 lappar)
+  • Ordningen är alltid JAN 1, JAN 2, FEB 1, …
+  • "Skapa valt antal / månad" klarar även 3–12 lappar/månad
+  • Använder vald etikettyp, logotyp, marginaler och klipplinjer
+
+ANPASSNING:
+  • Texten krymper automatiskt tills den får plats
+  • Logotypens storlek och toppavstånd justeras i vänsterpanelen
+  • Klipplinjer kan slås av/på
+  • Inställningar sparas i settings.json
 
 EXPORT:
-  • Alla PDF:er sparas i undermappen 'export/'
-  • Mapp: {export_folder}
-  • Knapp "📤 Öppna Export-mappen" öppnar mappen direkt
+  • Alla PDF:er sparas i {LabelModule.get_export_folder()}
 
 KORTKOMMANDON:
-  • Ctrl+N: Lägg till nytt etikettfält
-  • Mushjul: Scrolla i etikettlistan
+  • Ctrl+N: nytt etikettfält
+  • Mushjul: scroll i båda panelerna
 
-LOGOTYPMAPP:
+LOGGOTYPMAPP:
   {DEFAULT_LOGO_FOLDER}
-
-INSTALLATION AV VERKTYG:
-  • Inkscape:     https://inkscape.org/release/
-  • Ghostscript:  https://ghostscript.com/releases/
         """)
-        help_txt.config(state="disabled", bg="#f5f5f5")
+        help_txt.config(state="disabled")
         help_txt.pack(fill="both", expand=True, padx=10, pady=10)
 
-    # ──────────────────────────────────────────────────────
-    # INSTÄLLNINGSHANTERING
-    # ──────────────────────────────────────────────────────
-
-    def on_logo_top_changed(self) -> None:
-        """Uppdaterar logotypens toppmarginal (px) i LabelModule."""
+    def _update_verifikat_info(self, *_args) -> None:
+        """Visar hur många lappar den valda varianten ger."""
         try:
-            value = max(0, int(self.logo_top_px_var.get()))
+            count = VerifikatModule.validate_per_month(
+                self.verifikat_per_month_var.get()
+            )
+            self.verifikat_info.config(
+                text=f"→ {len(MONTHS_SE) * count} lappar "
+                     f"({len(MONTHS_SE)} månader × {count})"
+            )
         except (tk.TclError, ValueError):
-            return  # Halvskrivet värde — ignorera tills giltigt
-
-        try:
-            settings = LabelModule.get_current_settings()
-            settings.logo_min_top_margin = value
-            settings.logo_top_margin     = value
-            LabelModule.set_current_settings(settings)
-        except Exception as e:
-            print(f"[Inställning] Kunde inte uppdatera logotyp-toppmarginal: {e}")
+            self.verifikat_info.config(text="→ Ange 1–12 lappar per månad")
 
     # ──────────────────────────────────────────────────────
     # ETIKETTFÄLT
     # ──────────────────────────────────────────────────────
 
     def update_label_fields(self, preserve_content: bool = False) -> None:
-        """Skapar/uppdaterar etikettfälten i höger panel."""
+        """Skapar/uppdaterar textfälten i höger panel."""
         previous = (
-            [t.get("1.0", tk.END).strip() for t in self.labels_text]
+            [text.get("1.0", tk.END).strip() for text in self.labels_text]
             if preserve_content else []
         )
-
         for widget in self.label_container.winfo_children():
             widget.destroy()
         self.labels_text.clear()
 
         count = 12 if self.type_var.get() == "index" else self.antal_var.get()
-
-        for i in range(count):
+        for index in range(count):
             frame = ttk.Frame(self.label_container)
             frame.pack(fill="x", pady=2, padx=5)
-
-            ttk.Label(frame, text=f"Etikett {i + 1}:", width=10).pack(side="left")
-            text = tk.Text(frame, height=2, width=40)
-            text.pack(side="left", fill="x", expand=True, padx=(5, 0))
-
-            if i < len(previous):
-                text.insert("1.0", previous[i])
-
-            self.labels_text.append(text)
+            ttk.Label(frame, text=f"Etikett {index + 1}:", width=10).pack(side="left")
+            text_widget = tk.Text(frame, height=2, width=40)
+            text_widget.pack(side="left", fill="x", expand=True, padx=(5, 0))
+            if index < len(previous):
+                text_widget.insert("1.0", previous[index])
+            self.labels_text.append(text_widget)
 
     def add_label_hotkey(self, event=None) -> None:
-        """Ctrl+N: Lägg till ett nytt etikettfält (max 50)."""
+        """Ctrl+N lägger till ett etikettfält (max 50)."""
         if self.type_var.get() == "index":
             messagebox.showinfo("Info", "Index har alltid exakt 12 fält.")
             return
@@ -476,61 +529,66 @@ INSTALLATION AV VERKTYG:
     # LOGOTYP
     # ──────────────────────────────────────────────────────
 
-    def open_logo_folder(self) -> None:
-        """Öppnar Logotyp-mappen i OS-filhanteraren."""
-        folder = DEFAULT_LOGO_FOLDER
-        if not folder.exists():
-            folder.mkdir(parents=True, exist_ok=True)
-            print(f"[Mapp] Skapade: {folder}")
-        self._open_folder_in_os(folder)
-
-    def open_export_folder(self) -> None:
-        """Öppnar export/-mappen i OS-filhanteraren."""
-        try:
-            folder = LabelModule.get_export_folder()
-        except AttributeError:
-            folder = Path(__file__).parent / "export"
-            folder.mkdir(parents=True, exist_ok=True)
-        self._open_folder_in_os(folder)
-
-    def _open_folder_in_os(self, folder: Path) -> None:
-        """Öppnar en mapp i OS-filhanteraren (Windows/macOS/Linux)."""
-        try:
-            if sys.platform.startswith("win"):
-                os.startfile(folder)
-            elif sys.platform.startswith("darwin"):
-                subprocess.run(["open", folder])
-            else:
-                subprocess.run(["xdg-open", folder])
-        except Exception as e:
-            messagebox.showerror("Fel", f"Kunde inte öppna mappen:\n{e}")
+    def _refresh_logo_label(self) -> None:
+        """Uppdaterar statusraden för vald logotyp."""
+        if self.logo_path and self.prepared_logo:
+            name = Path(self.logo_path).name
+            size = f"{self.prepared_logo.width}×{self.prepared_logo.height}"
+            kind = self.logo_kind or "bild"
+            self.logo_label.config(
+                text=f"✓ {name}\n({size} px, {kind})", foreground="green"
+            )
+            self.clear_logo_button.config(state="normal")
+        else:
+            self.logo_label.config(text="Ingen logotyp vald", foreground="gray")
+            self.clear_logo_button.config(state="disabled")
 
     def choose_logo(self) -> None:
-        """Väljer och laddar logotyp (SVG/EPS/PNG/JPG/…)."""
-        filepath, filetype = LabelModule.select_logo_file()
+        """Väljer och laddar en logotyp (PDF/SVG/EPS/AI/raster)."""
+        filepath, filetype = LogoModule.select_logo_file(self.root)
+        if not filepath:
+            return
+        prepared = LabelModule.load_and_resize_logo(filepath)
+        if not prepared:
+            messagebox.showerror(
+                "Logotypen kunde inte läsas",
+                f"Kunde inte läsa {Path(filepath).name}.\n\n"
+                "Kontrollera filen och att ett konverteringsverktyg "
+                "finns installerat (se Hjälp-fliken).",
+            )
+            return
+        self.logo_path = filepath
+        self.prepared_logo = prepared
+        self.logo_kind = filetype or "bild"
+        self._refresh_logo_label()
+        self.save_settings()
 
-        if filepath:
-            self.logo_path     = filepath
-            self.prepared_logo = LabelModule.load_and_resize_logo(filepath)
+    def clear_logo(self) -> None:
+        """Tar bort den valda logotypen."""
+        self.logo_path = None
+        self.prepared_logo = None
+        self.logo_kind = ""
+        self._refresh_logo_label()
+        self.save_settings()
 
-            if self.prepared_logo:
-                filename = os.path.basename(filepath)
-                size     = (f"{self.prepared_logo.size[0]}"
-                            f"×{self.prepared_logo.size[1]}")
-                self.logo_label.config(
-                    text=f"✓ {filename}\n({size} px, {filetype})",
-                    foreground="green"
-                )
-                print(f"[Logo] Laddad: {filename} ({filetype})")
+    def open_logo_folder(self) -> None:
+        DEFAULT_LOGO_FOLDER.mkdir(parents=True, exist_ok=True)
+        self._open_folder_in_os(DEFAULT_LOGO_FOLDER)
+
+    def open_export_folder(self) -> None:
+        self._open_folder_in_os(LabelModule.get_export_folder())
+
+    def _open_folder_in_os(self, folder: Path) -> None:
+        """Öppnar en mapp i OS-filhanteraren."""
+        try:
+            if sys.platform.startswith("win"):
+                os.startfile(folder)  # type: ignore[attr-defined]
+            elif sys.platform.startswith("darwin"):
+                subprocess.run(["open", str(folder)], check=False)
             else:
-                self.logo_label.config(
-                    text="✗ Kunde inte ladda logotyp",
-                    foreground="red"
-                )
-        else:
-            self.logo_path     = None
-            self.prepared_logo = None
-            self.logo_label.config(text="Ingen logotyp vald", foreground="gray")
+                subprocess.run(["xdg-open", str(folder)], check=False)
+        except Exception as exc:
+            messagebox.showerror("Fel", f"Kunde inte öppna mappen:\n{exc}")
 
     # ──────────────────────────────────────────────────────
     # KLIPPLINJER
@@ -538,67 +596,49 @@ INSTALLATION AV VERKTYG:
 
     def _draw_cut_lines(
         self,
-        c:      canvas.Canvas,
-        width:  float,
+        c: canvas.Canvas,
+        width: float,
         height: float,
-        cols:   int,
-        rows:   int,
+        cols: int,
+        rows: int,
     ) -> None:
-        """Ritar streckade klipplinjer kant till kant över hela arket.
-
-        Vertikala linjer vid varje kolumns vänster/högerkant —
-        hela sidans höjd (y=0 → A4_HEIGHT).
-
-        Horisontella linjer vid varje rads övre/underkant —
-        hela sidans bredd (x=0 → A4_WIDTH).
-
-        Etiketternas egna ramar ritas separat av label.py och
-        påverkas inte.
-        """
+        """Ritar streckade klipplinjer kant till kant över hela arket."""
         if not self.cut_lines_var.get():
             return
 
         c.saveState()
         c.setStrokeColor(CUT_LINE_COLOR)
         c.setLineWidth(CUT_LINE_WIDTH)
-        c.setDash(CUT_LINE_DASH[0], CUT_LINE_DASH[1])
+        c.setDash(*CUT_LINE_DASH)
 
-        # Vertikala linjer
-        x_positions: set = set()
+        x_positions: set[float] = set()
         for col in range(cols):
-            x_left  = PDF_SIDE_MARGIN + col * (width + PDF_SPACING)
-            x_right = x_left + width
-            x_positions.add(round(x_left,  3))
-            x_positions.add(round(x_right, 3))
-
+            x_left = PDF_SIDE_MARGIN + col * (width + PDF_SPACING)
+            x_positions.add(round(x_left, 3))
+            x_positions.add(round(x_left + width, 3))
         for x in sorted(x_positions):
             c.line(x, 0, x, A4_HEIGHT)
 
-        # Horisontella linjer
-        y_positions: set = set()
+        y_positions: set[float] = set()
         for row in range(rows):
-            y_top    = A4_HEIGHT - PDF_TOP_MARGIN - row * (height + PDF_SPACING)
-            y_bottom = y_top - height
-            y_positions.add(round(y_top,    3))
-            y_positions.add(round(y_bottom, 3))
-
+            y_top = A4_HEIGHT - PDF_TOP_MARGIN - row * (height + PDF_SPACING)
+            y_positions.add(round(y_top, 3))
+            y_positions.add(round(y_top - height, 3))
         for y in sorted(y_positions):
             c.line(0, y, A4_WIDTH, y)
 
         c.restoreState()
 
     # ──────────────────────────────────────────────────────
-    # SKAPA PDF (rygg / index)
+    # RYGGETIKETTER / INDEX
     # ──────────────────────────────────────────────────────
 
     def create_pdf(self) -> None:
-        """Skapar PDF med autoanpassning. Sparar i export/-mappen."""
-        self.on_logo_top_changed()
-
+        """Skapar PDF för rygg-/indexetiketter i export/-mappen."""
+        self.on_logo_top_changed(save=False)
         label_type = self.type_var.get()
-        all_texts  = [t.get("1.0", tk.END).strip() for t in self.labels_text]
+        all_texts = [text.get("1.0", tk.END).strip() for text in self.labels_text]
 
-        # Validering
         if label_type == "index":
             if len(all_texts) != 12:
                 messagebox.showerror("Fel", "Index kräver exakt 12 etikettfält.")
@@ -606,7 +646,7 @@ INSTALLATION AV VERKTYG:
             texts = all_texts
         else:
             texts = (
-                [t for t in all_texts if t]
+                [text for text in all_texts if text]
                 if self.multi_label.get()
                 else ([all_texts[0]] if all_texts and all_texts[0] else [])
             )
@@ -614,248 +654,234 @@ INSTALLATION AV VERKTYG:
                 messagebox.showerror("Fel", "Inga giltiga etiketter ifyllda.")
                 return
 
-        # Filnamn + sökväg i export/-mappen
-        title    = (
-            re.sub(r'[\\/*?:"<>|]', "", texts[0].split("\n")[0])
-            [:40].replace(" ", "_") or "etikett"
-        )
-        filename = f"{label_type}_{title}.pdf"
-        out_path = _get_out_path(filename)
+        title = re.sub(r'[\\/*?:"<>|]', "", texts[0].split("\n")[0])[:40]
+        title = title.replace(" ", "_") or "etikett"
+        out_path = _get_out_path(f"{label_type}_{title}.pdf")
 
-        # Rita
-        c = canvas.Canvas(str(out_path), pagesize=A4)
+        c = canvas.Canvas(str(out_path), pagesize=A4, pageCompression=1)
         if label_type == "index":
             self.draw_index_labels(c, texts)
         else:
             self.draw_spine_labels(c, texts)
         c.save()
 
+        self.save_settings()
         messagebox.showinfo(
             "PDF skapad",
-            f"✓ {filename}\n\n"
-            f"Sparad i:\n{out_path.parent}\n\n"
-            f"• Logotyp och text autoanpassade\n"
-            f"• {get_copyright_notice()}"
+            f"✓ {out_path.name}\n\nSparad i:\n{out_path.parent}\n\n"
+            f"{get_copyright_notice()}",
         )
         self.open_file(out_path)
 
-    # ──────────────────────────────────────────────────────
-    # VERIFIKAT
-    # ──────────────────────────────────────────────────────
-
-    def build_verifikat_texts(self, year: int, per_month: int) -> List[str]:
-        """Bygger verifikat-texter för alla månader × per_month.
-
-        Format per lapp:
-            VERIFIKAT
-            <MÅN>
-            <NR>
-            <ÅR>
-
-        Ordning: JAN 1, JAN 2, … FEB 1, FEB 2, … DEC.
-        """
-        texts: List[str] = []
-        for month in MONTHS_SE:
-            for nr in range(1, per_month + 1):
-                texts.append(f"VERIFIKAT\n{month}\n{nr}\n{year}")
-        return texts
-
-    def create_verifikat_pdf(self) -> None:
-        """Skapar verifikat-PDF för valt år. Sparar i export/-mappen.
-
-        - Etikettyp 'index' faller tillbaka till rygg_smal.
-        - Använder vald logotyp, marginal och autoanpassning.
-        """
-        self.on_logo_top_changed()
-
-        try:
-            year = int(self.verifikat_year_var.get())
-        except (tk.TclError, ValueError):
-            messagebox.showerror("Fel", "Ange ett giltigt år för verifikaten.")
+    def draw_spine_labels(self, c: canvas.Canvas, texts: List[str]) -> None:
+        """Ritar ryggetiketter i rutnät med klipplinjer."""
+        if not texts:
             return
+        width = BINDER_SMALL_WIDTH if self.type_var.get() == "rygg_smal" \
+            else BINDER_THICK_WIDTH
+        height = BINDER_HEIGHT
+        cols, rows = _grid_size(width, height)
+        per_page = cols * rows
+        self._draw_cut_lines(c, width, height, cols, rows)
 
-        per_month  = max(1, min(12, int(self.verifikat_per_month_var.get())))
-        label_type = self.type_var.get()
-        if label_type == "index":
-            label_type = "rygg_smal"
-
-        width    = BINDER_SMALL_WIDTH if label_type == "rygg_smal" else BINDER_THICK_WIDTH
-        height   = BINDER_HEIGHT
-        texts    = self.build_verifikat_texts(year, per_month)
-        filename = f"verifikat_{year}.pdf"
-        out_path = _get_out_path(filename)
-
-        c = canvas.Canvas(str(out_path), pagesize=A4)
-        self._draw_verifikat_labels(c, texts, width, height)
-        c.save()
-
-        messagebox.showinfo(
-            "Verifikat skapade",
-            f"✓ {filename}\n\n"
-            f"År: {year}\n"
-            f"Lappar per månad: {per_month}\n"
-            f"Totalt antal lappar: {len(texts)}\n\n"
-            f"Sparad i:\n{out_path.parent}\n\n"
-            f"• Etikettyp: {'Smal' if label_type == 'rygg_smal' else 'Tjock'}\n"
-            f"• Logotyp och text autoanpassade\n"
-            f"• {get_copyright_notice()}"
-        )
-        self.open_file(out_path)
-
-    def _draw_verifikat_labels(
-        self,
-        c:      canvas.Canvas,
-        texts:  List[str],
-        width:  float,
-        height: float,
-    ) -> None:
-        """Ritar verifikat-etiketter i rutnät (klipplinjer + draw_single_label)."""
-        max_rows = max(1, int(
-            (A4_HEIGHT - 2 * PDF_TOP_MARGIN) / (height + PDF_SPACING)))
-        cols     = max(1, int(
-            (A4_WIDTH  - 2 * PDF_SIDE_MARGIN) / (width  + PDF_SPACING)))
-        per_page = max_rows * cols
-
-        self._draw_cut_lines(c, width, height, cols, max_rows)
-
-        current = 0
-        for text in texts:
-            if current >= per_page:
+        font_name = LabelModule.get_bold_font()
+        for index, text in enumerate(texts):
+            if index and index % per_page == 0:
                 c.showPage()
-                current = 0
-                self._draw_cut_lines(c, width, height, cols, max_rows)
+                self._draw_cut_lines(c, width, height, cols, rows)
 
-            col = current // max_rows
-            row = current %  max_rows
-            x   = PDF_SIDE_MARGIN + col * (width + PDF_SPACING)
-            y   = (A4_HEIGHT - PDF_TOP_MARGIN
-                   - (row + 1) * height - row * PDF_SPACING)
+            slot = index % per_page
+            col, row = divmod(slot, rows)
+            x = PDF_SIDE_MARGIN + col * (width + PDF_SPACING)
+            y = (A4_HEIGHT - PDF_TOP_MARGIN
+                 - (row + 1) * height - row * PDF_SPACING)
 
             LabelModule.draw_single_label(
                 c, x, y, width, height, text,
                 prepared_logo_image=self.prepared_logo,
-                base_font_name="Helvetica-Bold",
+                base_font_name=font_name,
                 initial_font_size=self.text_size_var.get(),
                 auto_shrink_text=self.auto_shrink.get(),
             )
-            current += 1
 
-    # ──────────────────────────────────────────────────────
-    # RYGGETIKETTER
-    # ──────────────────────────────────────────────────────
-
-    def draw_spine_labels(
-        self, c: canvas.Canvas, texts: List[str]
-    ) -> None:
-        """Ritar ryggetiketter (smal/tjock) i rutnät med klipplinjer."""
-        width    = (BINDER_SMALL_WIDTH
-                    if self.type_var.get() == "rygg_smal"
-                    else BINDER_THICK_WIDTH)
-        height   = BINDER_HEIGHT
-        max_rows = max(1, int(
-            (A4_HEIGHT - 2 * PDF_TOP_MARGIN) / (height + PDF_SPACING)))
-        cols     = max(1, int(
-            (A4_WIDTH  - 2 * PDF_SIDE_MARGIN) / (width  + PDF_SPACING)))
-
-        self._draw_cut_lines(c, width, height, cols, max_rows)
-
-        entries = texts if self.multi_label.get() else [texts[0]]
-        current = 0
-
-        for text in entries:
-            if current >= max_rows * cols:
-                c.showPage()
-                current = 0
-                self._draw_cut_lines(c, width, height, cols, max_rows)
-
-            col = current // max_rows
-            row = current %  max_rows
-            x   = PDF_SIDE_MARGIN + col * (width + PDF_SPACING)
-            y   = (A4_HEIGHT - PDF_TOP_MARGIN
-                   - (row + 1) * height - row * PDF_SPACING)
-
-            LabelModule.draw_single_label(
-                c, x, y, width, height, text,
-                prepared_logo_image=self.prepared_logo,
-                base_font_name="Helvetica-Bold",
-                initial_font_size=self.text_size_var.get(),
-                auto_shrink_text=self.auto_shrink.get(),
-            )
-            current += 1
-
-    # ──────────────────────────────────────────────────────
-    # INDEXETIKETTER
-    # ──────────────────────────────────────────────────────
-
-    def draw_index_labels(
-        self, c: canvas.Canvas, texts: List[str]
-    ) -> None:
-        """Ritar 12 indexetiketter på A4 med klipplinjer."""
-        margin_top  = PDF_TOP_MARGIN
-        spacing     = 2 * mm
-        height      = 18 * mm
+    def draw_index_labels(self, c: canvas.Canvas, texts: List[str]) -> None:
+        """Ritar 12 indexetiketter på A4."""
+        margin_top = PDF_TOP_MARGIN
+        spacing = 2 * mm
+        height = 18 * mm
         label_width = A4_WIDTH - 2 * PDF_SIDE_MARGIN
 
-        # Logotyp i toppen (om vald)
         if self.prepared_logo:
-            logo_h     = LabelModule.draw_logo_on_page(
-                c, self.prepared_logo, "index")
-            margin_top += logo_h + 5 * mm
+            margin_top += LabelModule.draw_logo_on_page(
+                c, self.prepared_logo, "index"
+            ) + 5 * mm
 
-        # Klipplinjer för index
         if self.cut_lines_var.get():
             c.saveState()
             c.setStrokeColor(CUT_LINE_COLOR)
             c.setLineWidth(CUT_LINE_WIDTH)
-            c.setDash(CUT_LINE_DASH[0], CUT_LINE_DASH[1])
-
-            x_left  = PDF_SIDE_MARGIN
+            c.setDash(*CUT_LINE_DASH)
+            x_left = PDF_SIDE_MARGIN
             x_right = PDF_SIDE_MARGIN + label_width
-            c.line(x_left,  0, x_left,  A4_HEIGHT)
+            c.line(x_left, 0, x_left, A4_HEIGHT)
             c.line(x_right, 0, x_right, A4_HEIGHT)
-
-            for i in range(len(texts)):
-                y_top    = A4_HEIGHT - margin_top - i * (height + spacing)
-                y_bottom = y_top - height
-                c.line(0, y_top,    A4_WIDTH, y_top)
-                c.line(0, y_bottom, A4_WIDTH, y_bottom)
-
+            for index in range(len(texts)):
+                y_top = A4_HEIGHT - margin_top - index * (height + spacing)
+                c.line(0, y_top, A4_WIDTH, y_top)
+                c.line(0, y_top - height, A4_WIDTH, y_top - height)
             c.restoreState()
 
-        # Etiketter
-        for i, text in enumerate(texts):
-            y            = A4_HEIGHT - margin_top - i * (height + spacing)
+        font_name = LabelModule.get_bold_font()
+        for index, text in enumerate(texts):
+            y = A4_HEIGHT - margin_top - index * (height + spacing)
             display_text = (
-                f"{i + 1}. {text.strip()}" if text.strip() else f"{i + 1}."
+                f"{index + 1}. {text.strip()}" if text.strip() else f"{index + 1}."
             )
             LabelModule.draw_single_label(
-                c,
-                x_pos=PDF_SIDE_MARGIN,
-                y_pos=y - height,
-                width=label_width,
-                height=height,
-                text_content=display_text,
+                c, PDF_SIDE_MARGIN, y - height, label_width, height,
+                display_text,
                 prepared_logo_image=None,
-                base_font_name="Helvetica-Bold",
+                base_font_name=font_name,
                 initial_font_size=12,
                 auto_shrink_text=True,
             )
 
     # ──────────────────────────────────────────────────────
-    # ÖPPNA FIL
+    # VERIFIKAT — HELA ÅRET, 1 OCH 2 PER MÅNAD
+    # ──────────────────────────────────────────────────────
+
+    def build_verifikat_texts(self, year: int, per_month: int) -> List[str]:
+        """Bygger etiketttexter för alla 12 månader."""
+        return VerifikatModule.build_verifikat_texts(year, per_month)
+
+    def create_verifikat_pdf(
+        self, per_month: Optional[int] = None, show_message: bool = True
+    ) -> Optional[Path]:
+        """Skapar en verifikat-PDF för hela året.
+
+        Args:
+            per_month: 1, 2 … 12. None använder värdet i GUI:t.
+            show_message: Visa bekräftelse och öppna filen (False vid
+                massgenerering av flera varianter).
+
+        Returns:
+            Sökvägen till PDF:en, eller None vid fel/avbrutett val.
+        """
+        self.on_logo_top_changed(save=False)
+        try:
+            year = VerifikatModule.validate_year(self.verifikat_year_var.get())
+            count = VerifikatModule.validate_per_month(
+                self.verifikat_per_month_var.get() if per_month is None else per_month
+            )
+        except (tk.TclError, ValueError) as exc:
+            if show_message:
+                messagebox.showerror("Fel", str(exc))
+            return None
+
+        label_type = self.type_var.get()
+        if label_type == "index":
+            label_type = "rygg_smal"
+        width = BINDER_SMALL_WIDTH if label_type == "rygg_smal" \
+            else BINDER_THICK_WIDTH
+        height = BINDER_HEIGHT
+        texts = self.build_verifikat_texts(year, count)
+
+        out_path = _get_out_path(VerifikatModule.verifikat_filename(year, count))
+        c = canvas.Canvas(str(out_path), pagesize=A4, pageCompression=1)
+        self._draw_verifikat_labels(c, texts, width, height)
+        c.save()
+        self.save_settings()
+
+        if show_message:
+            messagebox.showinfo(
+                "Verifikat skapade",
+                f"✓ {out_path.name}\n\n"
+                f"År: {year}\n"
+                f"Lappar per månad: {count}\n"
+                f"Totalt antal lappar: {len(texts)}\n\n"
+                f"Sparad i:\n{out_path.parent}\n\n"
+                f"Etikettyp: {'Smal' if width == BINDER_SMALL_WIDTH else 'Tjock'}\n"
+                f"{get_copyright_notice()}",
+            )
+            self.open_file(out_path)
+        return out_path
+
+    def create_verifikat_both(self) -> None:
+        """Skapar både 1/månad och 2/månad för hela året i ett svep."""
+        self.on_logo_top_changed(save=False)
+        try:
+            year = VerifikatModule.validate_year(self.verifikat_year_var.get())
+        except (tk.TclError, ValueError) as exc:
+            messagebox.showerror("Fel", str(exc))
+            return
+
+        created = []
+        for count in (1, 2):
+            path = self.create_verifikat_pdf(count, show_message=False)
+            if path:
+                created.append((count, path))
+
+        if not created:
+            return
+        details = "\n".join(
+            f"• {path.name} — {len(MONTHS_SE) * count} lappar "
+            f"({count}/månad)"
+            for count, path in created
+        )
+        messagebox.showinfo(
+            "Verifikat för hela året skapade",
+            f"✓ {len(created)} PDF:er för {year}\n\n{details}\n\n"
+            f"Sparade i:\n{created[0][1].parent}\n\n"
+            f"Varje PDF innehåller alla 12 månader i ordning.\n"
+            f"{get_copyright_notice()}",
+        )
+        self._open_folder_in_os(created[0][1].parent)
+
+    def _draw_verifikat_labels(
+        self,
+        c: canvas.Canvas,
+        texts: List[str],
+        width: float,
+        height: float,
+    ) -> None:
+        """Ritar verifikatetiketter i rutnät, med sidbrytning."""
+        font_name = LabelModule.get_bold_font()
+
+        def draw_label(pdf, x, y, label_width, label_height, text) -> None:
+            LabelModule.draw_single_label(
+                pdf, x, y, label_width, label_height, text,
+                prepared_logo_image=self.prepared_logo,
+                base_font_name=font_name,
+                initial_font_size=self.text_size_var.get(),
+                auto_shrink_text=self.auto_shrink.get(),
+            )
+
+        def cut_lines(cols, rows) -> None:
+            self._draw_cut_lines(c, width, height, cols, rows)
+
+        VerifikatModule.draw_verifikat_labels(
+            c, texts, width, height, draw_label, cut_lines,
+            page_size=A4,
+            side_margin=PDF_SIDE_MARGIN,
+            top_margin=PDF_TOP_MARGIN,
+            spacing=PDF_SPACING,
+        )
+
+    # ──────────────────────────────────────────────────────
+    # ÖPPNA GENERERAD FIL
     # ──────────────────────────────────────────────────────
 
     def open_file(self, path: Path) -> None:
-        """Öppnar den genererade PDF-filen i OS-standardprogrammet."""
+        """Öppnar en genererad PDF i OS-standardprogrammet."""
         try:
             if sys.platform.startswith("win"):
-                os.startfile(path)
+                os.startfile(path)  # type: ignore[attr-defined]
             elif sys.platform.startswith("darwin"):
-                subprocess.run(["open", path])
+                subprocess.run(["open", str(path)], check=False)
             else:
-                subprocess.run(["xdg-open", path])
-        except Exception as e:
-            messagebox.showerror("Öppningsfel", str(e))
+                subprocess.run(["xdg-open", str(path)], check=False)
+        except Exception as exc:
+            messagebox.showerror("Öppningsfel", str(exc))
 
 
 # ──────────────────────────────────────────────────────────
@@ -864,28 +890,16 @@ INSTALLATION AV VERKTYG:
 
 def main() -> None:
     """Startar Pärmetikett Generator."""
+    LabelModule.register_preferred_bold_font()
     print(f"\n{'=' * 50}")
     print(f"  Pärmetikett Generator {get_copyright_year()}")
     print(f"  {get_copyright_notice()}")
     print(f"{'=' * 50}\n")
+    print(f"[Export] 📤 Mapp: {LabelModule.get_export_folder()}")
 
-    # Visa export-mapp vid start
-    try:
-        export_folder = LabelModule.get_export_folder()
-        print(f"[Export] 📤 Mapp: {export_folder}")
-    except AttributeError:
-        print("[Export] ⚠ get_export_folder() ej tillgänglig i LabelModule")
-
-    # Registrera Arial-Bold (fallback: Helvetica-Bold)
-    try:
-        pdfmetrics.registerFont(TTFont("Arial-Bold", "arialbd.ttf"))
-        print("[Font] ✓ Arial-Bold laddad")
-    except Exception:
-        print("[Font] ⚠ Arial-Bold ej tillgänglig — använder Helvetica-Bold")
-
-    # Starta GUI
-    root = ThemedTk(theme="arc")
-    app  = LabelGUI(root)   # noqa: F841
+    saved = SettingsModule.load_settings()
+    root = _create_root()
+    LabelGUI(root, saved)
     root.mainloop()
 
 

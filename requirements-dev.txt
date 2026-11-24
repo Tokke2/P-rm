@@ -1,0 +1,4 @@
+-r requirements.txt
+pypdf>=4.0
+# Frivilliga converterare för tester av vektorlogotyper:
+pymupdf>=1.23
