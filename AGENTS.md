@@ -8,8 +8,13 @@ undantag. Regler markerade **HÅRD** får aldrig brytas.
 
 ## 1. Branch-reglerna (HÅRD)
 
-* Repot ska alltid ha **exakt EN branch**: den aktuella arbetsbranchen
-  (arena-branchen). `main` är borttagen och ska **aldrig** återskapas.
+* Repot ska alltid ha **exakt EN arbetsbranch**: den aktuella
+  arena-branchen. Alla gamla session-brancher tas bort (det är gjort —
+  `arena/813a1786-p-rm` raderad 2026-11-25).
+* `main` står kvar som GitHub:s default-branch endast för att sandboxens
+  token saknar admin-rättighet att byta/radera den. `main` är **förbjudet
+  område**: aldrig committa, pusha eller merga emot den, och den ska
+  aldrig återskapas eller uppdateras.
 * Arbeta **aldrig emot main** — inte committa, inte pusha, inte bygga på den.
   Allt arbete sker **endast emot arbetsbranchen**, speciellt vid
   appuppdateringar och releaser.
