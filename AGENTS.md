@@ -28,6 +28,12 @@ undantag. Regler markerade **HÅRD** får aldrig brytas.
 * En release som inte speglar senaste koden är alltid ett **fel**.
 * Versionshöjning: patch för buggfixar, minor för ny funktionalitet,
   major vid breaking change.
+* **Driftnotis (sandlåda):** uppladdning till `uploads.github.com` är
+  blockerad — använd därför releasens **auto-genererade källarkiv** (zipball/
+  tarball, hämtas via `api.github.com`/`codeload.github.com`) som
+  uppdaterarens jämförelsekälla. Kommandomönster:
+  `gh release create vX.Y.Z --target <arbetsbranch> --latest --notes "…"`.
+  Egen asset-uppladdning (`gh release upload`) fungerar inte i sandlådan.
 
 ## 3. REQ-K4 — filjämförelse i uppdateraren (HÅRD)
 
