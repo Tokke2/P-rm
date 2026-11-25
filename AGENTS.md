@@ -1,8 +1,14 @@
-# AGENTS.md — Hårda regler för Tokke2/P-rm
+# AGENTS.md — Regler för Tokke2/P-rm (Pärmetikett Generator)
 
 Den här filen är den **enda sanningskällan** för arbetsregler i repot.
 Varje ny chatt/agent ska läsa den **först** och följa alla regler utan
 undantag. Regler markerade **HÅRD** får aldrig brytas.
+
+**Anpassning per app:** filen gäller appen *Pärmetikett Generator*
+(`folder.py` + `Script/`). Regler märkta **[APP]** är anpassade för just
+denna app; övriga regler är universella. Vid ny app kopieras filen till det
+repots rot, universella regler behålls och **[APP]**-reglerna skrivs om efter
+appens teknik (se §12).
 
 ---
 
@@ -14,12 +20,10 @@ undantag. Regler markerade **HÅRD** får aldrig brytas.
 * `main` står kvar som GitHub:s default-branch endast för att sandboxens
   token saknar admin-rättighet att byta/radera den. `main` är **förbjudet
   område**: aldrig committa, pusha eller merga emot den, och den ska
-  aldrig återskapas eller uppdateras.
-* Arbeta **aldrig emot main** — inte committa, inte pusha, inte bygga på den.
-  Allt arbete sker **endast emot arbetsbranchen**, speciellt vid
-  appuppdateringar och releaser.
-* **Aldrig merge** — inte `git merge`, inte `gh pr merge`, inga mergar i någon
-  form. Ändringar committas alltid direkt på arbetsbranchen.
+  aldrig återskapas eller uppdateras — **speciellt inte vid
+  appuppdateringar**.
+* **Aldrig merge** — inte `git merge`, inte `gh pr merge`, inga mergar i
+  någon form. Ändringar committas alltid direkt på arbetsbranchen.
 * Om gamla brancher dyker upp igen: ta bort dem så att endast **en** branch
   är kvar.
 
@@ -72,7 +76,38 @@ undantag. Regler markerade **HÅRD** får aldrig brytas.
 * Listorna förs i `PDFSORTER_FORSLAG.md`; gamla batcher arkiveras i filen
   och används aldrig igen.
 
-## 7. Stående kvalitetskrav (återkommande — alltid beakta)
+## 7. Regel-insättning på GitHub (HÅRD — metaregel)
+
+* Skriver användaren "**- hård regel**" eller "**regel**" i chatten ska den
+  nya regeln **omedelbart** skrivas in i denna fil, pushas till
+  arbetsbranchen och inkluderas i release-uppdateringen (§2) — i samma tur.
+
+## 8. Loggning & felhantering (HÅRD — [APP])
+
+* Appen ska ha **två kompletta loggar**: **applog** (all normal
+  händelselogging) och **fellog**.
+* **Felloggen innehåller alla aktiva fel.** När ett fel har blivit åtgärdat
+  tas det **automatiskt bort** från felloggen.
+* Användaren ska också kunna **rensa bort fel manuellt** ur loggen efter att
+  de är åtgärdade.
+* **Gårdagens loggar arkiveras** automatiskt, och **arkiverade loggar
+  raderas efter 7 dagar**.
+
+## 9. Terminalfönster (HÅRD — [APP])
+
+* Inget terminal-/konsolfönster visas, **varken vid start eller skanning** —
+  konsolen ska alltid startas **minimerat/dolt** (t.ex. `pythonw.exe` eller
+  `CREATE_NO_WINDOW` på Windows).
+* Själva appfönstret följer skärmreglerna i §11 (max höjd-läge, anpassad
+  bredd).
+
+## 10. Tabeller & kolumner (regel — [APP])
+
+* Har appen tabeller/kolumner ska användaren kunna **sortera** kolumner
+  (klick på kolumnhuvud) och **flytta** dem (dra-och-släpp) — med vald
+  ordning ihåkommen mellan sessioner.
+
+## 11. Stående kvalitetskrav ([APP] — alltid beakta)
 
 * **Skärpa & skärm**: skarp rendering vid alla DPI/skärmstorlekar — ingen
   grumlig text/bild/kolumn; tydliga typsnitt; layout som anpassar sig till
@@ -81,6 +116,13 @@ undantag. Regler markerade **HÅRD** får aldrig brytas.
 * **Design**: bättre logotyp (skarp, används överallt; vektor/redigerbar för
   tryck) och nya bättre ikoner.
 * **Prestanda**: bättre minneshantering, snabbare, energisnålare.
-* **Inställningar**: egen underflik för att skapa profiler (när
-  profilstöd finns/skapas).
-* **Underhåll**: arkiverade loggar rensas automatiskt efter **7 dagar**.
+* **Inställningar**: egen underflik för att skapa profiler; ruttvalet från
+  ttk-versionens projektskapare ska finnas.
+* **Updater**: säkrare och bättre (se §3).
+
+## 12. Anpassning per app
+
+* Denna fil anpassas **efter varje app**: universella regler (§1–§7) följer
+  med oförändrade till nästa app-repo, medan **[APP]**-reglerna (§8–§11)
+  skrivs om efter den appens teknik och funktioner. Filen ligger alltid i
+  repots rot.

@@ -7,6 +7,9 @@ chattmeddelande läggs en ny batch med **10 helt nya förslag** — aldrig
 > **Städad 2026-11-25:** de gamla v1.0.0-raderna är borttagna. Filen började
 > om ren (filen fanns inte i detta repo tidigare).
 
+**Räknare:** batch #1 visad 2026-11-25 — nästa batch (10 helt nya förslag,
+ej återbrukade) visas efter 10 chattmeddelanden därefter.
+
 ---
 
 ## Aktiv batch — #1 (2026-11-25) · 10 nya förslag
