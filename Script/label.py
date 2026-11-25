@@ -27,8 +27,10 @@ from reportlab.pdfgen.canvas import Canvas
 
 try:
     from Script import logotyp as LogoModule
+    from Script import streckkod as BarcodeModule
 except ImportError:  # när filen körs direkt ur Script-mappen
     import logotyp as LogoModule  # type: ignore[no-redef]
+    import streckkod as BarcodeModule  # type: ignore[no-redef]
 
 
 # ──────────────────────────────────────────────────────────
@@ -51,6 +53,15 @@ LABEL_MIN_FONT_SIZE = 4.0
 LABEL_MAX_FONT_SIZE = 32.0
 LABEL_BORDER_COLOR = colors.black
 LABEL_BORDER_WIDTH_PT = 0.3 * mm
+
+# Streckkod i etikettens underkant (#2)
+BARCODE_BAND_MAX = 9 * mm          # största bandhöjd som reserveras
+BARCODE_TEXT_GAP = 2 * mm          # mellanrum text ↔ streckkodsband
+BARCODE_BOTTOM_GAP = 1.5 * mm      # avstånd från etikettens nederkant
+
+# Automatisk logotypkontrast (#16)
+LOGO_CONTRAST_THRESHOLD = 0.55     # under detta värde anses logotypen mörk
+LOGO_CONTRAST_PAD = 2.0            # pt vit kant runt logotypen
 
 DPI = 300
 
@@ -438,6 +449,47 @@ def draw_logo_on_page(
         return 0.0
 
 
+def corner_mark_lines(
+    width: float,
+    height: float,
+    length: Optional[float] = None,
+) -> List[Tuple[Tuple[float, float], Tuple[float, float]]]:
+    """Geometri för förstärkta hörnmarkeringar (förslag #22).
+
+    Returnerar 8 linjer ((start), (slut)) — två L-formade markeringar per
+    hörn, inskrivna i etikettens hörn. Ren funktion så att geometrin kan
+    testas utan PDF.
+    """
+    if width <= 0 or height <= 0:
+        return []
+    if length is None:
+        length = min(width, height) * 0.14
+    length = max(4.0, min(length, 14.0))
+    inset = 0.5  # halva linjebredden så markeringen ligger i hörnet
+    lines: List[Tuple[Tuple[float, float], Tuple[float, float]]] = []
+
+    # Vänster/höger x och nedre/övre y för varje hörn.
+    for x_edge in ((inset, inset + length), (width - inset, width - inset - length)):
+        for y_edge in (
+            (inset, inset + length), (height - inset, height - inset - length)
+        ):
+            x, x2 = x_edge
+            y, y2 = y_edge
+            lines.append(((x, y), (x2, y)))
+            lines.append(((x, y), (x, y2)))
+    return lines
+
+
+def _draw_corner_marks(canvas: Canvas, width: float, height: float) -> None:
+    """Ritar förstärkta hörnmarkeringar (L-formade) i etikettens hörn."""
+    canvas.saveState()
+    canvas.setStrokeColor(colors.black)
+    canvas.setLineWidth(1.1)
+    for (x1, y1), (x2, y2) in corner_mark_lines(width, height):
+        canvas.line(x1, y1, x2, y2)
+    canvas.restoreState()
+
+
 def draw_single_label(
     canvas: Canvas,
     x_pos: float,
@@ -450,8 +502,17 @@ def draw_single_label(
     initial_font_size: float = 12.0,
     auto_shrink_text: bool = True,
     settings: Optional[MarginSettings] = None,
+    barcode_text: Optional[str] = None,
+    corner_marks: bool = False,
+    logo_contrast: bool = False,
 ) -> None:
-    """Ritar en etikett med ram, valfri logotyp och autoanpassad text."""
+    """Ritar en etikett med ram, valfri logotyp och autoanpassad text.
+
+    Nytt i v1.1.0:
+    * `barcode_text` — Code 128-B streckkod i etikettens underkant (#2).
+    * `corner_marks` — förstärkta hörnmarkeringar för exakt trimning (#22).
+    * `logo_contrast` — vit baksida bakom mörka logotyper (#16).
+    """
     if width <= 0 or height <= 0:
         return
     settings = settings or _current_settings
@@ -465,6 +526,10 @@ def draw_single_label(
     canvas.setLineWidth(LABEL_BORDER_WIDTH_PT)
     canvas.rect(0, 0, width, height)
 
+    # Förstärkta hörnmarkeringar (ritas efter ramen så de syns tydligt).
+    if corner_marks:
+        _draw_corner_marks(canvas, width, height)
+
     text_content = (text_content or "").strip()
     has_text = bool(text_content)
     max_text_width = max(1.0, width - 2 * settings.text_side_margin)
@@ -477,6 +542,14 @@ def draw_single_label(
         initial_lines = _break_text_into_lines(
             text_content, canvas, font_name, font_size, max_text_width
         )
+
+    # Streckkod i underkanten (#2) — reserverar ett band nedtill.
+    barcode_band = 0.0
+    if barcode_text:
+        try:
+            barcode_band = min(BARCODE_BAND_MAX, height * 0.20)
+        except (TypeError, ValueError):
+            barcode_band = 0.0
 
     # Logotyp (centrerad, med minsta avstånd till övre kanten)
     logo_w = logo_h = 0.0
@@ -497,6 +570,22 @@ def draw_single_label(
                     logo_w, logo_h, area_x, 0.0, area_width, height,
                     min_top_margin=minimum_top, align_top=True,
                 )
+                # Automatisk logotypkontrast (#16): mörk logotyp får en
+                # vit, rundad baksida så den förblir tydlig.
+                if logo_contrast:
+                    luminance = LogoModule.estimate_luminance(
+                        prepared_logo_image
+                    )
+                    if luminance is not None and luminance < LOGO_CONTRAST_THRESHOLD:
+                        canvas.setFillColor(colors.white)
+                        canvas.setStrokeColor(colors.white)
+                        canvas.roundRect(
+                            x_logo - LOGO_CONTRAST_PAD,
+                            y_logo - LOGO_CONTRAST_PAD,
+                            logo_w + 2 * LOGO_CONTRAST_PAD,
+                            logo_h + 2 * LOGO_CONTRAST_PAD,
+                            radius=2.0, stroke=1, fill=1,
+                        )
                 canvas.drawImage(
                     ImageReader(prepared_logo_image),
                     x_logo, y_logo, logo_w, logo_h, mask="auto",
@@ -506,10 +595,17 @@ def draw_single_label(
                 print(f"[Etikett] Logotypfel: {exc}")
 
     if not has_text or not initial_lines:
+        # Streckkoden ritas även utan text (t.ex. rena kodetiketter).
+        if barcode_band:
+            _draw_barcode_band(
+                canvas, width, height, barcode_band, barcode_text
+            )
         canvas.restoreState()
         return
 
     y_text_bottom = settings.text_top_margin
+    if barcode_band:
+        y_text_bottom += barcode_band + BARCODE_TEXT_GAP
     avail_height = max(0.0, y_text_top - y_text_bottom)
     lines = initial_lines
 
@@ -545,7 +641,36 @@ def draw_single_label(
         y = y_start + (len(lines) - 1 - index) * line_height
         canvas.drawString(x, y, line)
 
+    if barcode_band:
+        _draw_barcode_band(canvas, width, height, barcode_band, barcode_text)
+
     canvas.restoreState()
+
+
+def _draw_barcode_band(
+    canvas: Canvas,
+    width: float,
+    height: float,
+    band_height: float,
+    barcode_text: Optional[str],
+) -> None:
+    """Ritar Code 128-B streckkodsband i etikettens underkant (#2)."""
+    if not barcode_text or band_height <= 0:
+        return
+    inset = min(4.0, width * 0.08)
+    bar_width = max(8.0, width - 2 * inset)
+    bar_height = band_height - BARCODE_BOTTOM_GAP
+    if bar_height <= 0:
+        return
+    BarcodeModule.draw_code128(
+        canvas,
+        (width - bar_width) / 2.0,
+        BARCODE_BOTTOM_GAP,
+        bar_width,
+        bar_height,
+        barcode_text,
+        show_text=False,
+    )
 
 
 __all__ = [
@@ -568,6 +693,7 @@ __all__ = [
     "load_and_resize_logo",
     "draw_logo_on_page",
     "draw_single_label",
+    "corner_mark_lines",
     "compute_centered_logo_position",
     "MarginSettings",
     "get_current_settings",

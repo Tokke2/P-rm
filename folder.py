@@ -28,11 +28,15 @@ try:
     from Script import logotyp as LogoModule
     from Script import settings_store as SettingsModule
     from Script import verifikat as VerifikatModule
+    from Script import arkivindex as ArkivindexModule
+    from Script import streckkod as BarcodeModule
 except ImportError:
     import label as LabelModule            # type: ignore[no-redef]
     import logotyp as LogoModule            # type: ignore[no-redef]
     import settings_store as SettingsModule  # type: ignore[no-redef]
     import verifikat as VerifikatModule      # type: ignore[no-redef]
+    import arkivindex as ArkivindexModule    # type: ignore[no-redef]
+    import streckkod as BarcodeModule        # type: ignore[no-redef]
 
 
 # === Konstanter ===
@@ -147,6 +151,29 @@ class LabelGUI:
             )
         )
 
+        # Förslag #10/#11: periodläge (manad/kvartal/halvar) och språk.
+        saved_period = str(self.saved.get("verifikat_period", "manad"))
+        self.verifikat_period_var = tk.StringVar(
+            value=saved_period if saved_period in VerifikatModule.PERIOD_MODES
+            else VerifikatModule.DEFAULT_PERIOD
+        )
+        saved_language = str(self.saved.get("verifikat_language", "se"))
+        self.verifikat_language_var = tk.StringVar(
+            value=saved_language if saved_language in VerifikatModule.MONTHS_BY_LANGUAGE
+            else VerifikatModule.DEFAULT_LANGUAGE
+        )
+
+        # Förslag #2/#22/#16: streckkod, hörnmarkeringar, logotypkontrast.
+        self.barcode_var = tk.BooleanVar(
+            value=bool(self.saved.get("barcode_labels", False))
+        )
+        self.corner_marks_var = tk.BooleanVar(
+            value=bool(self.saved.get("corner_marks", False))
+        )
+        self.logo_contrast_var = tk.BooleanVar(
+            value=bool(self.saved.get("logo_contrast", False))
+        )
+
         initial_top = self._clamp(self.saved.get("logo_top_px", 5), 0, 100)
         self.logo_top_px_var = tk.IntVar(value=initial_top)
 
@@ -154,6 +181,7 @@ class LabelGUI:
         self.prepared_logo: object = None
         self.logo_kind: str = ""
         self.labels_text: list = []
+        self.labels_include: list = []  # checkruta per rad (förslag: checkruta)
 
         # Återställ senast använda logotyp (om den fortfarande finns).
         self.logo_path: Optional[str] = self.saved.get("last_logo_path") or None
@@ -197,6 +225,11 @@ class LabelGUI:
             "logo_top_px": self.logo_top_px_var.get(),
             "verifikat_year": self.verifikat_year_var.get(),
             "verifikat_per_month": self.verifikat_per_month_var.get(),
+            "verifikat_period": self.verifikat_period_var.get(),
+            "verifikat_language": self.verifikat_language_var.get(),
+            "barcode_labels": bool(self.barcode_var.get()),
+            "corner_marks": bool(self.corner_marks_var.get()),
+            "logo_contrast": bool(self.logo_contrast_var.get()),
             "label_count": self.antal_var.get(),
             "last_logo_path": self.logo_path or "",
             "window_geometry": self.root.geometry(),
@@ -340,6 +373,18 @@ class LabelGUI:
         ttk.Checkbutton(
             left, text="Klipplinjer (kant till kant)", variable=self.cut_lines_var
         ).pack(anchor="w", pady=2)
+        ttk.Checkbutton(
+            left, text="Förstärkta hörnmarkeringar (#22)",
+            variable=self.corner_marks_var
+        ).pack(anchor="w", pady=2)
+        ttk.Checkbutton(
+            left, text="Streckkod (Code 128) på etiketten (#2)",
+            variable=self.barcode_var
+        ).pack(anchor="w", pady=2)
+        ttk.Checkbutton(
+            left, text="Automatisk logotypkontrast (#16)",
+            variable=self.logo_contrast_var
+        ).pack(anchor="w", pady=2)
 
         ttk.Label(left, text="Antal etiketter:").pack(anchor="w", pady=(10, 0))
         self.antal_entry = ttk.Spinbox(
@@ -353,6 +398,10 @@ class LabelGUI:
             style="Accent.TButton",
         ).pack(fill="x", pady=5)
         ttk.Button(
+            left, text="🗂 Skapa arkivindex (A4, platskoder) (#1)",
+            command=self.create_arkivindex_pdf,
+        ).pack(fill="x", pady=2)
+        ttk.Button(
             left, text="📤 Öppna Export-mappen", command=self.open_export_folder,
         ).pack(fill="x", pady=2)
 
@@ -361,6 +410,22 @@ class LabelGUI:
         # ── Verifikat ─────────────────────────────────────
         ttk.Label(left, text="Verifikat (hela året)", font=("", 10, "bold")).pack(
             anchor="w", pady=(0, 5))
+
+        # Förslag #10: periodläge; förslag #11: språk.
+        period_frame = ttk.Frame(left)
+        period_frame.pack(fill="x", pady=2)
+        ttk.Label(period_frame, text="Period:").pack(side="left")
+        ttk.Combobox(
+            period_frame, textvariable=self.verifikat_period_var, width=10,
+            values=("manad", "kvartal", "halvar"), state="readonly",
+            command=self._update_verifikat_info,
+        ).pack(side="left", padx=(5, 10))
+        ttk.Label(period_frame, text="Språk:").pack(side="left")
+        ttk.Combobox(
+            period_frame, textvariable=self.verifikat_language_var, width=6,
+            values=("se", "en", "no"), state="readonly",
+            command=self._update_verifikat_info,
+        ).pack(side="left", padx=(5, 0))
 
         year_frame = ttk.Frame(left)
         year_frame.pack(fill="x", pady=2)
@@ -457,7 +522,17 @@ VERIFIKAT — HELA ÅRET:
       verifikat_<år>_2_per_manad.pdf  (24 lappar)
   • Ordningen är alltid JAN 1, JAN 2, FEB 1, …
   • "Skapa valt antal / månad" klarar även 3–12 lappar/månad
+  • Period: månader, kvartal (Q1–Q4) eller halvår (H1–H2)  [#10]
+  • Språk: se / en / no styr månadsförkortningarna          [#11]
   • Använder vald etikettyp, logotyp, marginaler och klipplinjer
+
+NYA FUNKTIONER (v1.1.0):
+  • Checkruta per etikettrad — kryssa för vad som ska skrivas ut
+  • Streckkod (Code 128-B) i etikettens underkant             [#2]
+  • Förstärkta hörnmarkeringar för exakt trimning             [#22]
+  • Automatisk logotypkontrast: mörka logotyper får vit baksida [#16]
+  • Arkivindex (A4) med platskoder A1-01, A1-02 … av alla
+    ikryssade etiketter                                       [#1]
 
 ANPASSNING:
   • Texten krymper automatiskt tills den får plats
@@ -481,12 +556,20 @@ LOGGOTYPMAPP:
     def _update_verifikat_info(self, *_args) -> None:
         """Visar hur många lappar den valda varianten ger."""
         try:
+            period = VerifikatModule.validate_period_mode(
+                self.verifikat_period_var.get()
+            )
+            language = VerifikatModule.validate_language(
+                self.verifikat_language_var.get()
+            )
             count = VerifikatModule.validate_per_month(
                 self.verifikat_per_month_var.get()
             )
+            periods = VerifikatModule.period_labels(period, language)
+            word = VerifikatModule.PERIOD_MODES[period]["sv"]
             self.verifikat_info.config(
-                text=f"→ {len(MONTHS_SE) * count} lappar "
-                     f"({len(MONTHS_SE)} månader × {count})"
+                text=f"→ {len(periods) * count} lappar "
+                     f"({len(periods)} {word} × {count})"
             )
         except (tk.TclError, ValueError):
             self.verifikat_info.config(text="→ Ange 1–12 lappar per månad")
@@ -496,25 +579,66 @@ LOGGOTYPMAPP:
     # ──────────────────────────────────────────────────────
 
     def update_label_fields(self, preserve_content: bool = False) -> None:
-        """Skapar/uppdaterar textfälten i höger panel."""
+        """Skapar/uppdaterar textfälten i höger panel (med checkruta per rad)."""
         previous = (
             [text.get("1.0", tk.END).strip() for text in self.labels_text]
+            if preserve_content else []
+        )
+        previous_include = (
+            [bool(var.get()) for var in self.labels_include]
             if preserve_content else []
         )
         for widget in self.label_container.winfo_children():
             widget.destroy()
         self.labels_text.clear()
+        self.labels_include.clear()
 
         count = 12 if self.type_var.get() == "index" else self.antal_var.get()
         for index in range(count):
             frame = ttk.Frame(self.label_container)
             frame.pack(fill="x", pady=2, padx=5)
+            include_var = tk.BooleanVar(
+                value=previous_include[index] if index < len(previous_include)
+                else True
+            )
+            ttk.Checkbutton(
+                frame, variable=include_var, width=2,
+                command=lambda: None,
+            ).pack(side="left")
             ttk.Label(frame, text=f"Etikett {index + 1}:", width=10).pack(side="left")
             text_widget = tk.Text(frame, height=2, width=40)
             text_widget.pack(side="left", fill="x", expand=True, padx=(5, 0))
             if index < len(previous):
                 text_widget.insert("1.0", previous[index])
             self.labels_text.append(text_widget)
+            self.labels_include.append(include_var)
+
+    def _included_texts(self) -> List[str]:
+        """Texterna från rader med ikryssad checkruta (i ordning)."""
+        texts = []
+        for text_widget, include_var in zip(self.labels_text, self.labels_include):
+            if include_var.get():
+                texts.append(text_widget.get("1.0", tk.END).strip())
+        return texts
+
+    def _barcode_text_for(self, label_text: str) -> Optional[str]:
+        """Streckkodsinnehåll för en etikett: första användbara raden.
+
+        Tar textens första rad (verifikat: period + nummer + år), begränsar
+        till ASCII 32–126 och max 24 tecken för bra scanningsbarhet.
+        """
+        rows = [row.strip() for row in (label_text or "").split("\n") if row.strip()]
+        if not rows:
+            return None
+        candidate = rows[0] if rows[0].upper() != "VERIFIKAT" else (
+            " ".join(rows[1:4]) if len(rows) >= 4 else rows[-1]
+        )
+        cleaned = "".join(
+            char for char in candidate if 32 <= ord(char) <= 126
+        ).strip()
+        if not cleaned:
+            return None
+        return cleaned[:24]
 
     def add_label_hotkey(self, event=None) -> None:
         """Ctrl+N lägger till ett etikettfält (max 50)."""
@@ -634,16 +758,21 @@ LOGGOTYPMAPP:
     # ──────────────────────────────────────────────────────
 
     def create_pdf(self) -> None:
-        """Skapar PDF för rygg-/indexetiketter i export/-mappen."""
+        """Skapar PDF för rygg-/indexetiketter i export/-mappen.
+
+        Endast rader med ikryssad checkruta inkluderas (checkrutaval).
+        """
         self.on_logo_top_changed(save=False)
         label_type = self.type_var.get()
-        all_texts = [text.get("1.0", tk.END).strip() for text in self.labels_text]
+        all_texts = self._included_texts()
 
         if label_type == "index":
-            if len(all_texts) != 12:
+            if len(self.labels_text) != 12:
                 messagebox.showerror("Fel", "Index kräver exakt 12 etikettfält.")
                 return
-            texts = all_texts
+            texts = [text for text in all_texts if text] or [
+                text.get("1.0", tk.END).strip() for text in self.labels_text
+            ]
         else:
             texts = (
                 [text for text in all_texts if text]
@@ -651,7 +780,11 @@ LOGGOTYPMAPP:
                 else ([all_texts[0]] if all_texts and all_texts[0] else [])
             )
             if not texts:
-                messagebox.showerror("Fel", "Inga giltiga etiketter ifyllda.")
+                messagebox.showerror(
+                    "Fel",
+                    "Inga giltiga etiketter ifyllda.\n"
+                    "Kryssa för de rader som ska skrivas ut.",
+                )
                 return
 
         title = re.sub(r'[\\/*?:"<>|]', "", texts[0].split("\n")[0])[:40]
@@ -685,6 +818,9 @@ LOGGOTYPMAPP:
         self._draw_cut_lines(c, width, height, cols, rows)
 
         font_name = LabelModule.get_bold_font()
+        corner_marks = bool(self.corner_marks_var.get())
+        logo_contrast = bool(self.logo_contrast_var.get())
+        use_barcode = bool(self.barcode_var.get())
         for index, text in enumerate(texts):
             if index and index % per_page == 0:
                 c.showPage()
@@ -702,6 +838,11 @@ LOGGOTYPMAPP:
                 base_font_name=font_name,
                 initial_font_size=self.text_size_var.get(),
                 auto_shrink_text=self.auto_shrink.get(),
+                barcode_text=(
+                    self._barcode_text_for(text) if use_barcode else None
+                ),
+                corner_marks=corner_marks,
+                logo_contrast=logo_contrast,
             )
 
     def draw_index_labels(self, c: canvas.Canvas, texts: List[str]) -> None:
@@ -744,6 +885,7 @@ LOGGOTYPMAPP:
                 base_font_name=font_name,
                 initial_font_size=12,
                 auto_shrink_text=True,
+                corner_marks=bool(self.corner_marks_var.get()),
             )
 
     # ──────────────────────────────────────────────────────
@@ -751,8 +893,12 @@ LOGGOTYPMAPP:
     # ──────────────────────────────────────────────────────
 
     def build_verifikat_texts(self, year: int, per_month: int) -> List[str]:
-        """Bygger etiketttexter för alla 12 månader."""
-        return VerifikatModule.build_verifikat_texts(year, per_month)
+        """Bygger etiketttexter för hela året (valt periodläge och språk)."""
+        return VerifikatModule.build_verifikat_texts(
+            year, per_month,
+            language=self.verifikat_language_var.get(),
+            period=self.verifikat_period_var.get(),
+        )
 
     def create_verifikat_pdf(
         self, per_month: Optional[int] = None, show_message: bool = True
@@ -773,6 +919,12 @@ LOGGOTYPMAPP:
             count = VerifikatModule.validate_per_month(
                 self.verifikat_per_month_var.get() if per_month is None else per_month
             )
+            period = VerifikatModule.validate_period_mode(
+                self.verifikat_period_var.get()
+            )
+            language = VerifikatModule.validate_language(
+                self.verifikat_language_var.get()
+            )
         except (tk.TclError, ValueError) as exc:
             if show_message:
                 messagebox.showerror("Fel", str(exc))
@@ -786,18 +938,22 @@ LOGGOTYPMAPP:
         height = BINDER_HEIGHT
         texts = self.build_verifikat_texts(year, count)
 
-        out_path = _get_out_path(VerifikatModule.verifikat_filename(year, count))
+        out_path = _get_out_path(
+            VerifikatModule.verifikat_filename(year, count, period=period)
+        )
         c = canvas.Canvas(str(out_path), pagesize=A4, pageCompression=1)
         self._draw_verifikat_labels(c, texts, width, height)
         c.save()
         self.save_settings()
 
         if show_message:
+            word = VerifikatModule.PERIOD_MODES[period]["sv"]
             messagebox.showinfo(
                 "Verifikat skapade",
                 f"✓ {out_path.name}\n\n"
                 f"År: {year}\n"
-                f"Lappar per månad: {count}\n"
+                f"Lappar per period ({word}): {count}\n"
+                f"Språk: {language.upper()}\n"
                 f"Totalt antal lappar: {len(texts)}\n\n"
                 f"Sparad i:\n{out_path.parent}\n\n"
                 f"Etikettyp: {'Smal' if width == BINDER_SMALL_WIDTH else 'Tjock'}\n"
@@ -823,16 +979,27 @@ LOGGOTYPMAPP:
 
         if not created:
             return
+        try:
+            period = VerifikatModule.validate_period_mode(
+                self.verifikat_period_var.get()
+            )
+            language = VerifikatModule.validate_language(
+                self.verifikat_language_var.get()
+            )
+        except (tk.TclError, ValueError):
+            period, language = VerifikatModule.DEFAULT_PERIOD, \
+                VerifikatModule.DEFAULT_LANGUAGE
+        periods = VerifikatModule.period_labels(period, language)
+        word = VerifikatModule.PERIOD_MODES[period]["sv"]
         details = "\n".join(
-            f"• {path.name} — {len(MONTHS_SE) * count} lappar "
-            f"({count}/månad)"
+            f"• {path.name} — {len(periods) * count} lappar ({count}/{word})"
             for count, path in created
         )
         messagebox.showinfo(
             "Verifikat för hela året skapade",
             f"✓ {len(created)} PDF:er för {year}\n\n{details}\n\n"
             f"Sparade i:\n{created[0][1].parent}\n\n"
-            f"Varje PDF innehåller alla 12 månader i ordning.\n"
+            f"Varje PDF innehåller alla perioder i ordning.\n"
             f"{get_copyright_notice()}",
         )
         self._open_folder_in_os(created[0][1].parent)
@@ -846,6 +1013,9 @@ LOGGOTYPMAPP:
     ) -> None:
         """Ritar verifikatetiketter i rutnät, med sidbrytning."""
         font_name = LabelModule.get_bold_font()
+        corner_marks = bool(self.corner_marks_var.get())
+        logo_contrast = bool(self.logo_contrast_var.get())
+        use_barcode = bool(self.barcode_var.get())
 
         def draw_label(pdf, x, y, label_width, label_height, text) -> None:
             LabelModule.draw_single_label(
@@ -854,6 +1024,11 @@ LOGGOTYPMAPP:
                 base_font_name=font_name,
                 initial_font_size=self.text_size_var.get(),
                 auto_shrink_text=self.auto_shrink.get(),
+                barcode_text=(
+                    self._barcode_text_for(text) if use_barcode else None
+                ),
+                corner_marks=corner_marks,
+                logo_contrast=logo_contrast,
             )
 
         def cut_lines(cols, rows) -> None:
@@ -866,6 +1041,37 @@ LOGGOTYPMAPP:
             top_margin=PDF_TOP_MARGIN,
             spacing=PDF_SPACING,
         )
+
+    # ──────────────────────────────────────────────────────
+    # ARKIVINDEX — förslag #1: A4-indexark med platskoder
+    # ──────────────────────────────────────────────────────
+
+    def create_arkivindex_pdf(self) -> Optional[Path]:
+        """Skapar ett A4-arkivindex av de ikryssade etiketterna."""
+        texts = [text for text in self._included_texts() if text]
+        if not texts:
+            messagebox.showerror(
+                "Fel",
+                "Inga etiketter valda.\nKryssa för de rader som ska "
+                "ingå i arkivindexet.",
+            )
+            return None
+
+        entries = ArkivindexModule.build_index_entries(texts)
+        out_path = _get_out_path(ArkivindexModule.arkivindex_filename())
+        ArkivindexModule.draw_arkivindex_pdf(
+            out_path, entries,
+            subtitle=f"Pärmetikett Generator {get_copyright_year()}",
+        )
+        self.save_settings()
+        messagebox.showinfo(
+            "Arkivindex skapat",
+            f"✓ {out_path.name}\n\n{len(entries)} pärmar med platskoder "
+            f"({entries[0].platskod}–{entries[-1].platskod})\n\n"
+            f"Sparad i:\n{out_path.parent}\n\n{get_copyright_notice()}",
+        )
+        self.open_file(out_path)
+        return out_path
 
     # ──────────────────────────────────────────────────────
     # ÖPPNA GENERERAD FIL

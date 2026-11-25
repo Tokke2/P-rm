@@ -49,11 +49,16 @@ ej återbrukade) visas efter 10 chattmeddelanden därefter. Båda listtyperna
 
 ## Aktiv batch — #1 (2026-11-25) · 10 nya förslag
 
+**Statusuppdatering 2026-11-25 (v1.1.0):** användaren valde att bygga
+25-listans nr 1, 2, 10, 11, 16, 22 + en checkruta per rad. De är nu
+**byggda och testade** — se statuskolumnen nedan (arkiverade listans
+förslag #1–#25). Inga av dem får återbrukas i nya listor.
+
 | # | Förslag | Beskrivning | Status |
 |---|---------|-------------|--------|
 | 1 | Filjämförande uppdaterare (REQ-K4) | Uppdateraren jämför filnamn + hash mot senaste Latest-release och uppdaterar endast det som skiljer. Backup tas bort först när uppdateringen verifierats. | Ny |
 | 2 | Auto-rensning av loggar | Arkiverade loggar rensas automatiskt efter 7 dagar vid start. | Ny |
-| 3 | Profilhanterare i Inställningar | Egen underflik där man skapar, byter och tar bort profiler (sparade förinställningar per kund/avdelning). | Ny |
+| 3 | Profilhanterare i Inställningar | Egen underflik där man skapar, byter och tar bort profiler (sparade förinställningar per kund/avdelning). Endast appar som använder profiler. | Ny |
 | 4 | WYSIWYG-förhandsvisning | Ett live-preview av etiketten/verifikatet innan PDF skapas — ser ut precis som utskriften. | Ny |
 | 5 | Batch-import från CSV/Excel | Importera hela etikettlistor från CSV/XLSX med kolumnmappning och felkontroll. | Ny |
 | 6 | QR-kod på verifikatetiketter | Valfri QR-kod som länkar till journal/mapp/ärendenummer, renderad i vektor-PDF. | Ny |
@@ -61,6 +66,24 @@ ej återbrukade) visas efter 10 chattmeddelanden därefter. Båda listtyperna
 | 8 | Mörkt/ljust tema | Temaväljare med hög kontrast för utskriftsmiljöer med svagt ljus; följer systeminställning. | Ny |
 | 9 | Utskriftsarkiv med sökning | Historik over skapade PDF:er med sökning, återskapande och statistik per månad. | Ny |
 | 10 | Energisnål läge | Lazy-rendering och paus av förhandsjobb vid batteridrift; lägre minnesanvändning vid stora listor. | Ny |
+
+---
+
+## Byggda förslag — 25-listan (2026-11-25 · skriven i chatten)
+
+Från "25 förslag som konkurrenterna saknar" (arkiverad nedan) byggdes
+följande i **v1.1.0**, plus en **checkruta per etikettrad** (välj vad som
+ska skrivas ut):
+
+| Nr i 25-listan | Funktion | Implementering |
+|----------------|----------|----------------|
+| 1 | Smart arkivindex | `Script/arkivindex.py` — A4-indexark med platskoder A1-01… + knapp i GUI:t |
+| 2 | Streckkoder | `Script/streckkod.py` — Code 128-B (ISO 15417, verifierad tabell) i etikettens underkant |
+| 10 | Kvartal/halvår | `verifikat.py` periodlägen: manad/kvartal (Q1–Q4)/halvar (H1–H2) + GUI-val |
+| 11 | Flerspråkiga etiketter | månadsförkortningar se/en/no i verifikat + GUI-val |
+| 16 | Automatisk logotypkontrast | `logotyp.estimate_luminance()` + vit baksida bakom mörka logotyper |
+| 22 | Förstärkta hörnmarkeringar | `label.corner_mark_lines()` — L-formade hörnmarkeringar per etikett |
+| — | Checkruta per rad | `folder.py`: kryssa per etikettrad → styr utskrift + arkivindex |
 
 ---
 

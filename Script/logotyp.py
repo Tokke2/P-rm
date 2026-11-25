@@ -574,6 +574,39 @@ def load_and_resize_logo(
 
 
 # ──────────────────────────────────────────────────────────
+# LUMINANS — förslag #16: automatisk logotypkontrast
+# ──────────────────────────────────────────────────────────
+
+def estimate_luminance(img: Optional[Image.Image]) -> Optional[float]:
+    """Uppskattar medelluminansen (0.0 = svart, 1.0 = vit) i en logotyp.
+
+    Transparanta pixlar kompositeras mot vitt (som på papper). Returnerar
+    None om bilden saknas eller är tom. Används för att automatiskt välja
+    kontraståtgärder (t.ex. vit baksida bakom mörka logotyper).
+    """
+    if img is None:
+        return None
+    try:
+        if img.width == 0 or img.height == 0:
+            return None
+        if img.mode != "RGBA":
+            img = img.convert("RGBA")
+        # Komposit mot vitt (alphakanalen avgör genomskinlighet).
+        background = Image.new("RGBA", img.size, (255, 255, 255, 255))
+        composited = Image.alpha_composite(background, img)
+        gray = composited.convert("L")
+        histogram = gray.histogram()
+        total = sum(histogram)
+        if not total:
+            return None
+        weighted = sum(value * count for value, count in enumerate(histogram))
+        return weighted / (total * 255.0)
+    except Exception as exc:
+        print(f"[Logo] Kunde inte beräkna luminans: {exc}")
+        return None
+
+
+# ──────────────────────────────────────────────────────────
 # PLACERING / LISTNING
 # ──────────────────────────────────────────────────────────
 
@@ -631,6 +664,7 @@ __all__ = [
     "convert_eps_to_png",
     "select_logo_file",
     "load_and_resize_logo",
+    "estimate_luminance",
     "compute_centered_logo_position",
     "list_logos_in_folder",
     "RASTER_FORMATS",

@@ -21,6 +21,11 @@ DEFAULT_SETTINGS: Dict[str, Any] = {
     "label_count": 1,
     "verifikat_year": 0,          # 0 = aktuellt år
     "verifikat_per_month": 2,
+    "verifikat_period": "manad",  # manad | kvartal | halvar  (förslag #10)
+    "verifikat_language": "se",   # se | en | no             (förslag #11)
+    "barcode_labels": False,      # Code 128-B på etiketter   (förslag #2)
+    "corner_marks": False,        # förstärkta hörnmarkeringar (förslag #22)
+    "logo_contrast": False,       # automatisk logotypkontrast (förslag #16)
     "last_logo_path": "",
     "window_geometry": "",
 }

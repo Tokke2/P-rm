@@ -6,6 +6,28 @@ verifikatetiketter för ett helt år.
 
 ## Nya förbättringar
 
+### v1.1.0 — nya funktioner (förslag från 25-listan)
+
+* **Checkruta per etikettrad** — kryssa för exakt vilka rader som ska
+  skrivas ut eller ingå i arkivindex.
+* **Smart arkivindex (#1)** — knappen _Skapa arkivindex_ genererar ett
+  A4-ark med alla ikryssade etiketter och platskoder A1-01, A1-02 …
+* **Streckkod Code 128-B (#2)** — valfri streckkod i etikettens underkant
+  (kodad från etikettens första rad; verifikat kodar period + nummer + år).
+* **Kvartal & halvår (#10)** — verifikat kan nu skapas per månad, kvartal
+  (Q1–Q4) eller halvår (H1–H2).
+* **Flerspråkiga etiketter (#11)** — månadsförkortningar på svenska,
+  engelska eller norska (se/en/no).
+* **Automatisk logotypkontrast (#16)** — mörka logotyper får automatiskt
+  en vit baksida så de förblir tydliga på etiketten.
+* **Förstärkta hörnmarkeringar (#22)** — L-formade markeringar i varje
+  etiketthörn för exakt trimning.
+* Nya inställningar (sparas som vanligt i `settings.json`):
+  `verifikat_period`, `verifikat_language`, `barcode_labels`,
+  `corner_marks`, `logo_contrast`.
+
+### Tidigare
+
 * **Logotyper i PDF, SVG, EPS och AI** — förutom PNG/JPG/TIFF m.fl.
   PDF-logotyper använder första sidan. Vektorer renderas i hög upplösning,
   tomma marginaler beskärs och logotypen centreras automatiskt på etiketten.

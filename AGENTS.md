@@ -122,8 +122,10 @@ appens teknik (se §12).
 * **Design**: bättre logotyp (skarp, används överallt; vektor/redigerbar för
   tryck) och nya bättre ikoner.
 * **Prestanda**: bättre minneshantering, snabbare, energisnålare.
-* **Inställningar**: egen underflik för att skapa profiler; ruttvalet från
-  ttk-versionens projektskapare ska finnas.
+* **Inställningar**: egen underflik för att skapa profiler **endast i
+  appar som använder profiler** (Pärmetikett Generator har profilhantering
+  i `Script/label.py` → subflik aktuell här); ruttvalet från ttk-versionens
+  projektskapare ska finnas där ruttval är relevant.
 * **Updater**: säkrare och bättre (se §3).
 
 ## 12. Anpassning per app

@@ -5,9 +5,31 @@
 <!--
 ═══════════════════════════════════════════════════════════════════════════════
   © Copyright Rickard Längkvist {get_copyright_year()} - All rights reserved
-  Specifikation v6.1 — Sammanslagen & uppdaterad
-  Senast uppdaterad: 2026-11-24
+  Specifikation v6.2 — Sammanslagen & uppdaterad
+  Senast uppdaterad: 2026-11-25
   Status: AKTIV UTVECKLING
+<!--
+  v6.2 — ÄNDRINGAR (2026-11-25, v1.1.0 — från 25-förslagslistan)
+  ───────────────────────────────────────────────────────────────
+  · Checkruta per etikettrad: endast ikryssade rader skrivs ut / ingår i
+    arkivindex (folder.py: _included_texts()).
+  · Förslag #1 Smart arkivindex: Script/arkivindex.py — A4-indexark med
+    platskoder A1-01, A1-02 …; knapp "Skapa arkivindex (A4)".
+  · Förslag #2 Streckkoder: Script/streckkod.py — Code 128-B (ISO 15417),
+    verifierad mönstertabell; valfritt band i etikettens underkant.
+  · Förslag #10 Kvartal/halvår: verifikat med period=manad|kvartal|halvar
+    (Q1–Q4, H1–H2). Filnamn: verifikat_<år>_kvartal_N_per_kvartal.pdf osv.
+  · Förslag #11 Flerspråkighet: månadsförkortningar se/en/no
+    (MONTHS_SE/EN/NO + validate_language).
+  · Förslag #16 Automatisk logotypkontrast: logotyp.estimate_luminance()
+    + vit baksida bakom mörka logotyper (tröskel 0.55).
+  · Förslag #22 Hörnmarkeringar: label.corner_mark_lines() — L-formade,
+    förstärkta hörnmarkeringar per etikett.
+  · Nya settings-nycklar (bakåtkompatibla): verifikat_period,
+    verifikat_language, barcode_labels, corner_marks, logo_contrast.
+  · Tester: tests/test_nya_funktioner.py (37 tester totalt).
+-->
+
   Python: 3.12+
   UI-ramverk: Tkinter + ttkthemes (BEHÅLLS — se sektion 13)
 ═══════════════════════════════════════════════════════════════════════════════
