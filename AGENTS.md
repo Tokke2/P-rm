@@ -69,12 +69,18 @@ appens teknik (se §12).
 * Testerna körs **alltid** före push och release. Ny funktionalitet ska
   komma med tester när det är rimligt.
 
-## 6. 10-meddelanderegeln (HÅRD)
+## 6. Förslagslistor (HÅRD)
 
-* Efter var **10:e chattmeddelande** visas en **ny förslagslista med 10 helt
-  nya förslag** — **aldrig återbrukade** från tidigare listor.
-* Listorna förs i `PDFSORTER_FORSLAG.md`; gamla batcher arkiveras i filen
-  och används aldrig igen.
+* **10-meddelanderegeln:** Efter var **10:e chattmeddelande** visas en **ny
+  förslagslista med 10 helt nya förslag** — **aldrig återbrukade** från
+  tidigare listor.
+* **25-förslagslistan:** Överblicken **"25 nya förslag som konkurrenterna
+  saknar och användare efterfrågar"** ska **alltid skrivas i chatten** när
+  den tas fram eller uppdateras.
+* **Alltid i chatten:** båda listorna skrivs alltid ut **i chatten** (synliga
+  i konversationen — inte bara i filer) och förs dessutom i
+  `PDFSORTER_FORSLAG.md` som återbruk-ledger; gamla listor återbrukas
+  aldrig.
 
 ## 7. Regel-insättning på GitHub (HÅRD — metaregel)
 

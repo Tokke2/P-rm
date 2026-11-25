@@ -8,7 +8,42 @@ chattmeddelande läggs en ny batch med **10 helt nya förslag** — aldrig
 > om ren (filen fanns inte i detta repo tidigare).
 
 **Räknare:** batch #1 visad 2026-11-25 — nästa batch (10 helt nya förslag,
-ej återbrukade) visas efter 10 chattmeddelanden därefter.
+ej återbrukade) visas efter 10 chattmeddelanden därefter. Båda listtyperna
+(10-batchen och 25-förslagslistan) ska alltid även **skrivas i chatten**
+(AGENTS.md §6).
+
+---
+
+## Arkiverad batch — "25 förslag" (2026-11-25 · skriven i chatten)
+
+25 nya förslag som konkurrenterna saknar och användare efterfrågar —
+**inget** av dessa får återbrukas i framtida listor:
+
+1. Smart arkivindex — auto-genererat A4-indexark med alla pärmar + platskoder
+2. Streckkoder (Code 128/EAN) på ryggetiketter för scannersökning
+3. Färgkodning per kund/avdelning — färgband/rand i etikettens kant
+4. Hyllplatsfält med auto-numrering (A1-01, A1-02 …) för pärmserier
+5. Serier/dubbletter i ett svep — "12 identiska pärmar" med löpnummer
+6. Årsringsbibliotek — "kopiera förra årets etikettuppsättning"
+7. Validering av verifikatnummer — varnar för dubletter/gap i serien
+8. Bevarandetidsfält ("Arkiveras till 2031", GDPR/bokföringslag)
+9. Skrivarkalibrering — sparade marginaler per skrivare, träffar rutmönstret exakt
+10. Kvartals-/halvårsgenerator (Q1–Q4, H1–H2) utöver månader
+11. Flerspråkiga etiketter (sv/en/no) med en växel
+12. Mall-läge med skrivskydd — lås layout, låt bara texter ändras
+13. Foto/scanna pärmrygg → OCR-förslag på ny etikett
+14. "Hitta rätt pärm" — skriv verifikatnummer, se pärm + månadslapp
+15. Indexflikar i färg för snabb bläddring i pärmryggen
+16. Automatisk logotypkontrast (ljus/mörk text efter bakgrund, WCAG)
+17. Inbyggd mm-skala att skriva ut och mäta pärmryggens bredd med
+18. Batch-ID i sidfot — spårbarhet: vilken dator/körning som skrev ut
+19. PDF/A-arkivering av etikettfilerna (långtidsbevarande-krav)
+20. Signaturrad på verifikatet — "utskrivet av / granskat av" + datum
+21. Kontrollfält: antal lappar per pärm kontrolleras mot arkivplanen
+22. Klipplinjer med förstärkta hörnmarkeringar för exakt trimning
+23. Skyddsläge — skrivskydda inställningar med PIN (standardiserade kontor)
+24. Snabbknappar för topp-3-konfigurationer (enklicksutskrift)
+25. Övervakad mapp — CSV/JSON i mappen → PDF skapas automatiskt
 
 ---
 
