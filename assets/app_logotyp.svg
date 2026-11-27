@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Pärmetikett Generator — appens logotyp (vektor, redigerbar för tryck)
+  Design: pärmrygg i djupblått med etikettfickor i vitt och orange
+  accentflik. Skarpare/high-DPI: inbyggd som fönsterikon och kan användas
+  som etikettlogotyp ("Använd appens logotyp" i GUI:t).
+-->
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512"
+     viewBox="0 0 512 512">
+  <title>Pärmetikett Generator</title>
+  <defs>
+    <linearGradient id="rygg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#1E3A5F"/>
+      <stop offset="1" stop-color="#2C5282"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Pärmrygg -->
+  <rect x="96" y="40" width="320" height="432" rx="28"
+        fill="url(#rygg)"/>
+  <!-- Ryggförstärkning -->
+  <rect x="112" y="56" width="16" height="400" rx="8" fill="#16283F"/>
+
+  <!-- Etikettfickor (vita, skarpa) -->
+  <rect x="160" y="96"  width="216" height="64" rx="10" fill="#FFFFFF"/>
+  <rect x="160" y="180" width="216" height="64" rx="10" fill="#FFFFFF"/>
+  <rect x="160" y="264" width="216" height="64" rx="10" fill="#FFFFFF"/>
+
+  <!-- Textlinjer i fickorna (ljusgrå, geometriska) -->
+  <rect x="184" y="118" width="128" height="8"  rx="4" fill="#C4CFDA"/>
+  <rect x="184" y="136" width="88"  height="8"  rx="4" fill="#DDE4EB"/>
+  <rect x="184" y="202" width="150" height="8"  rx="4" fill="#C4CFDA"/>
+  <rect x="184" y="220" width="96"  height="8"  rx="4" fill="#DDE4EB"/>
+  <rect x="184" y="286" width="112" height="8"  rx="4" fill="#C4CFDA"/>
+  <rect x="184" y="304" width="72"  height="8"  rx="4" fill="#DDE4EB"/>
+
+  <!-- Orange accentflik (verifikat) -->
+  <rect x="388" y="356" width="44" height="96" rx="10" fill="#F6A03C"/>
+
+  <!-- Årtalsplatta längst ned -->
+  <rect x="160" y="368" width="176" height="52" rx="10" fill="#F6A03C"/>
+  <text x="248" y="406" font-family="DejaVu Sans, sans-serif"
+        font-size="34" font-weight="bold" fill="#1E3A5F"
+        text-anchor="middle">2026</text>
+</svg>

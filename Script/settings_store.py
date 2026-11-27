@@ -9,6 +9,11 @@ import json
 from pathlib import Path
 from typing import Any, Dict
 
+try:
+    from Script import loggar as _LoggModule
+except ImportError:  # kör filen direkt ur Script-mappen
+    import loggar as _LoggModule  # type: ignore[no-redef]
+
 SETTINGS_PATH = Path(__file__).resolve().parent.parent / "settings.json"
 
 DEFAULT_SETTINGS: Dict[str, Any] = {
@@ -59,8 +64,10 @@ def load_settings(path: Path = SETTINGS_PATH) -> Dict[str, Any]:
                 for key in result:
                     if key in data:
                         result[key] = _coerce(key, data[key])
+        _LoggModule.logg.resolve_error("SETTINGS_READ")
     except (OSError, ValueError, TypeError) as exc:
         print(f"[Inställningar] Kunde inte läsa {path.name}: {exc}")
+        _LoggModule.logg.log_error("SETTINGS_READ", f"Kunde inte läsa {path.name}: {exc}")
     return result
 
 
@@ -71,9 +78,11 @@ def save_settings(settings: Dict[str, Any], path: Path = SETTINGS_PATH) -> bool:
         path.parent.mkdir(parents=True, exist_ok=True)
         with path.open("w", encoding="utf-8") as handle:
             json.dump(data, handle, indent=2, ensure_ascii=False, sort_keys=True)
+        _LoggModule.logg.resolve_error("SETTINGS_SAVE")
         return True
     except (OSError, TypeError, ValueError) as exc:
         print(f"[Inställningar] Kunde inte spara {path.name}: {exc}")
+        _LoggModule.logg.log_error("SETTINGS_SAVE", f"Kunde inte spara {path.name}: {exc}")
         return False
 
 

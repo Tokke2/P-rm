@@ -277,7 +277,12 @@ def _render_with_pymupdf(
         return False
     try:
         if svg:
-            doc = mod.open(stream=source.read_bytes(), filetype="svg")
+            try:
+                # Öppna via filsökväg — stream-öppning kan ge fel
+                # sidhöjd (aspektförvrängning) i vissa MuPDF-versioner.
+                doc = mod.open(str(source))
+            except Exception:
+                doc = mod.open(stream=source.read_bytes(), filetype="svg")
             pdf_bytes = doc.convert_to_pdf()
             doc = mod.open(stream=pdf_bytes, filetype="pdf")
         else:

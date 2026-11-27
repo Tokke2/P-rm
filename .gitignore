@@ -5,6 +5,7 @@ venv/
 export/
 Profiler/
 Logotyp/
+Loggar/
 settings.json
 *.log
 .DS_Store

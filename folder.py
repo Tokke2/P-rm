@@ -30,6 +30,9 @@ try:
     from Script import verifikat as VerifikatModule
     from Script import arkivindex as ArkivindexModule
     from Script import streckkod as BarcodeModule
+    from Script import loggar as LoggModule
+    from Script import skarm as SkarmModule
+    from Script import gui_helpers as GuiHelpersModule
 except ImportError:
     import label as LabelModule            # type: ignore[no-redef]
     import logotyp as LogoModule            # type: ignore[no-redef]
@@ -37,6 +40,9 @@ except ImportError:
     import verifikat as VerifikatModule      # type: ignore[no-redef]
     import arkivindex as ArkivindexModule    # type: ignore[no-redef]
     import streckkod as BarcodeModule        # type: ignore[no-redef]
+    import loggar as LoggModule              # type: ignore[no-redef]
+    import skarm as SkarmModule              # type: ignore[no-redef]
+    import gui_helpers as GuiHelpersModule   # type: ignore[no-redef]
 
 
 # === Konstanter ===
@@ -54,6 +60,9 @@ CUT_LINE_DASH = (2, 2)
 
 MONTHS_SE = VerifikatModule.MONTHS_SE
 DEFAULT_LOGO_FOLDER = Path(__file__).parent / "Logotyp"
+ASSETS_FOLDER = Path(__file__).parent / "assets"
+APP_LOGOTYP_SVG = ASSETS_FOLDER / "app_logotyp.svg"
+APP_LOGOTYP_ICON = ASSETS_FOLDER / "app_logotyp_512.png"
 
 VALID_LABEL_TYPES = {"rygg_smal", "rygg_tjock", "index"}
 
@@ -118,8 +127,14 @@ class LabelGUI:
         self.root = root
         self.saved = dict(saved) if saved is not None else SettingsModule.load_settings()
         self.root.title(f"Pärmetikett Generator {get_copyright_year()}")
-        self.root.geometry(self.saved.get("window_geometry") or "1024x720")
-        self.root.minsize(880, 600)
+        # §11: fönstret startar i MAX HÖJD-läge (anpassat efter skärmen)
+        # med anpassad bredd (sparminnad bredd används om den fanns).
+        self.root.geometry(SkarmModule.compute_start_geometry(
+            self.root.winfo_screenwidth(),
+            self.root.winfo_screenheight(),
+            self.saved.get("window_geometry", ""),
+        ))
+        self.root.minsize(880, 620)
 
         # ── Tkinter-variabler (värden från settings.json) ──
         saved_type = self.saved.get("label_type", "rygg_smal")
@@ -202,6 +217,14 @@ class LabelGUI:
         self.root.bind("<Command-n>", self.add_label_hotkey)
         self.root.protocol("WM_DELETE_WINDOW", self.on_close)
 
+        # §8: loggning av appstart + daglig städning (arkivera gårdagens
+        # loggar, radera arkiv äldre än 7 dagar).
+        housekeeping = LoggModule.logg.daily_housekeeping()
+        LoggModule.logg.log_app(
+            f"App startad (städning: {housekeeping['arkiverade']} arkiverade, "
+            f"{len(housekeeping['raderade'])} arkiv raderade)"
+        )
+
     @staticmethod
     def _clamp(value, minimum: int, maximum: int) -> int:
         try:
@@ -255,7 +278,11 @@ class LabelGUI:
             settings.logo_min_top_margin = float(value)
             settings.logo_top_margin = float(value)
             LabelModule.set_current_settings(settings)
+            LoggModule.logg.resolve_error("LOGO_MARGIN")
         except Exception as exc:
+            LoggModule.logg.log_error(
+                "LOGO_MARGIN", f"Kunde inte uppdatera logotypmarginal: {exc}"
+            )
             print(f"[Inställning] Kunde inte uppdatera logotypmarginal: {exc}")
         if save:
             self.save_settings()
@@ -269,8 +296,10 @@ class LabelGUI:
         self.notebook = ttk.Notebook(self.root)
         self.main_tab = ttk.Frame(self.notebook)
         self.help_tab = ttk.Frame(self.notebook)
+        self.logg_tab = ttk.Frame(self.notebook)
         self.notebook.add(self.main_tab, text="Generator")
         self.notebook.add(self.help_tab, text="Hjälp")
+        self.notebook.add(self.logg_tab, text="Loggar")
         self.notebook.pack(fill="both", expand=True)
 
         # ── Scrollbar vänsterpanel (alla kontroller nås även på små skärmar) ──
@@ -320,6 +349,10 @@ class LabelGUI:
         ttk.Button(
             left, text="📁 Välj logotyp (PDF/SVG/EPS…)",
             command=self.choose_logo,
+        ).pack(fill="x", pady=2)
+        ttk.Button(
+            left, text="⭐ Använd appens logotyp (vektor)",
+            command=self.use_app_logo,
         ).pack(fill="x", pady=2)
         ttk.Button(
             left, text="📂 Öppna Logotyp-mappen",
@@ -547,11 +580,84 @@ KORTKOMMANDON:
   • Ctrl+N: nytt etikettfält
   • Mushjul: scroll i båda panelerna
 
+LOGGAR (§8):
+  • Fellogg visar alla AKTIVA fel — åtgärdade fel försvinner
+    automatiskt, och kan även rensas manuellt på Loggar-fliken
+  • Applogg sparar händelser (PDF:er, logotyper, städning)
+  • Gårdagens loggposter arkiveras; arkivet rensas efter 7 dagar
+
+SKÄRM & SKÄRPA (§11):
+  • Fönstret startar i max höjd-läge (anpassat efter skärmen) med
+    anpassad bredd — inget terminalfönster behövs (kör pythonw.exe)
+  • DPI-medveten rendering (Windows) → skarp text på 4K/skalning
+  • Loggar-flikens kolumner kan sorteras (klick) och flyttas (dra)
+
 LOGGOTYPMAPP:
   {DEFAULT_LOGO_FOLDER}
         """)
         help_txt.config(state="disabled")
         help_txt.pack(fill="both", expand=True, padx=10, pady=10)
+
+        # ══════════════════════════════════════════════════
+        # LOGGAR-FLIK — §8: fellogg (aktiva fel) + applogg
+        # ══════════════════════════════════════════════════
+        fel_frame = ttk.LabelFrame(self.logg_tab, text="Fellogg — aktiva fel "
+                                   "(åtgärdade fel försvinner automatiskt)",
+                                   padding=8)
+        fel_frame.pack(fill="both", expand=True, padx=10, pady=(10, 5))
+
+        fel_columns = ("tid", "kod", "meddelande", "antal")
+        self.fel_tree = ttk.Treeview(
+            fel_frame, columns=fel_columns, show="headings", height=8
+        )
+        for column, text, width in (
+            ("tid", "Tid", 150),
+            ("kod", "Kod", 130),
+            ("meddelande", "Meddelande", 460),
+            ("antal", "Antal", 60),
+        ):
+            self.fel_tree.heading(column, text=text)
+            self.fel_tree.column(column, width=width, anchor="w")
+        GuiHelpersModule.make_treeview_interactive(self.fel_tree, fel_columns)
+        fel_scroll = ttk.Scrollbar(
+            fel_frame, orient="vertical", command=self.fel_tree.yview
+        )
+        self.fel_tree.configure(yscrollcommand=fel_scroll.set)
+        self.fel_tree.pack(side="left", fill="both", expand=True)
+        fel_scroll.pack(side="right", fill="y")
+
+        fel_buttons = ttk.Frame(self.logg_tab)
+        fel_buttons.pack(fill="x", padx=10)
+        ttk.Button(
+            fel_buttons, text="✕ Rensa valda fel",
+            command=self._clear_selected_errors,
+        ).pack(side="left", padx=(0, 5))
+        ttk.Button(
+            fel_buttons, text="🗑 Rensa alla",
+            command=self._clear_all_errors,
+        ).pack(side="left")
+        ttk.Button(
+            fel_buttons, text="🔄 Uppdatera", command=self._refresh_loggar
+        ).pack(side="right")
+
+        app_frame = ttk.LabelFrame(self.logg_tab, text="Applogg (senaste 100)",
+                                   padding=8)
+        app_frame.pack(fill="both", expand=True, padx=10, pady=(5, 10))
+        self.applog_text = tk.Text(
+            app_frame, height=10, wrap="none", state="disabled",
+            font=("Consolas", 9) if sys.platform.startswith("win") else ("", 9),
+        )
+        applog_scroll = ttk.Scrollbar(
+            app_frame, orient="vertical", command=self.applog_text.yview
+        )
+        self.applog_text.configure(yscrollcommand=applog_scroll.set)
+        self.applog_text.pack(side="left", fill="both", expand=True)
+        applog_scroll.pack(side="right", fill="y")
+
+        self._refresh_loggar()
+        self.notebook.bind(
+            "<<NotebookTabChanged>>", self._on_tab_changed
+        )
 
     def _update_verifikat_info(self, *_args) -> None:
         """Visar hur många lappar den valda varianten ger."""
@@ -650,6 +756,58 @@ LOGGOTYPMAPP:
             self.update_label_fields(preserve_content=True)
 
     # ──────────────────────────────────────────────────────
+    # LOGGAR-FLIK (§8)
+    # ──────────────────────────────────────────────────────
+
+    def _on_tab_changed(self, _event=None) -> None:
+        """Uppdaterar loggflikarna när fliken visas."""
+        try:
+            current = self.notebook.index(self.notebook.select())
+            if self.notebook.nametowidget(
+                self.notebook.tabs()[current]
+            ) is self.logg_tab:
+                self._refresh_loggar()
+        except Exception:
+            pass
+
+    def _refresh_loggar(self) -> None:
+        """Fyller felloggen (aktiva fel) och apploggvyerna."""
+        self.fel_tree.delete(*self.fel_tree.get_children())
+        for entry in LoggModule.logg.active_errors():
+            self.fel_tree.insert("", "end", iid=str(entry.get("kod")), values=(
+                entry.get("ts", ""),
+                entry.get("kod", ""),
+                entry.get("meddelande", ""),
+                entry.get("antal", 1),
+            ))
+        self.applog_text.config(state="normal")
+        self.applog_text.delete("1.0", tk.END)
+        for entry in LoggModule.logg.recent_app(100):
+            self.applog_text.insert(
+                tk.END,
+                f"{entry.get('ts', '')}  [{entry.get('nivå', 'INFO')}]  "
+                f"{entry.get('meddelande', '')}\n",
+            )
+        self.applog_text.see(tk.END)
+        self.applog_text.config(state="disabled")
+
+    def _clear_selected_errors(self) -> None:
+        """Rensar användarens valda fel (de är åtgärdade)."""
+        selection = self.fel_tree.selection()
+        if not selection:
+            messagebox.showinfo("Rensa fel", "Välj först fel att rensa.")
+            return
+        removed = LoggModule.logg.clear_errors(list(selection))
+        LoggModule.logg.log_app(f"{removed} fel rensade manuellt", "INFO")
+        self._refresh_loggar()
+
+    def _clear_all_errors(self) -> None:
+        """Rensar alla fel (alla är åtgärdade)."""
+        removed = LoggModule.logg.clear_errors(None)
+        LoggModule.logg.log_app(f"Alla fel rensade ({removed} st)", "INFO")
+        self._refresh_loggar()
+
+    # ──────────────────────────────────────────────────────
     # LOGOTYP
     # ──────────────────────────────────────────────────────
 
@@ -674,6 +832,9 @@ LOGGOTYPMAPP:
             return
         prepared = LabelModule.load_and_resize_logo(filepath)
         if not prepared:
+            LoggModule.logg.log_error(
+                "LOGO_LOAD", f"Kunde inte läsa {Path(filepath).name}"
+            )
             messagebox.showerror(
                 "Logotypen kunde inte läsas",
                 f"Kunde inte läsa {Path(filepath).name}.\n\n"
@@ -684,6 +845,31 @@ LOGGOTYPMAPP:
         self.logo_path = filepath
         self.prepared_logo = prepared
         self.logo_kind = filetype or "bild"
+        LoggModule.logg.resolve_error("LOGO_LOAD")   # åtgärdat → bort från felloggen
+        LoggModule.logg.log_app(f"Logotyp vald: {Path(filepath).name}")
+        self._refresh_logo_label()
+        self.save_settings()
+
+    def use_app_logo(self) -> None:
+        """Använder appens egen vektorlogotyp som etikettlogotyp."""
+        if not APP_LOGOTYP_SVG.is_file():
+            messagebox.showerror(
+                "Saknas", f"Appens logotyp finns inte: {APP_LOGOTYP_SVG}"
+            )
+            return
+        prepared = LabelModule.load_and_resize_logo(str(APP_LOGOTYP_SVG))
+        if not prepared:
+            LoggModule.logg.log_error("LOGO_LOAD", "Appens logotyp kunde inte läsas")
+            messagebox.showerror(
+                "Logotypen kunde inte läsas",
+                "Appens logotyp kunde inte läsas — se Loggar-fliken.",
+            )
+            return
+        self.logo_path = str(APP_LOGOTYP_SVG)
+        self.prepared_logo = prepared
+        self.logo_kind = "vektor"
+        LoggModule.logg.resolve_error("LOGO_LOAD")
+        LoggModule.logg.log_app("Appens logotyp vald")
         self._refresh_logo_label()
         self.save_settings()
 
@@ -712,6 +898,7 @@ LOGGOTYPMAPP:
             else:
                 subprocess.run(["xdg-open", str(folder)], check=False)
         except Exception as exc:
+            LoggModule.logg.log_error("MAPPOPEN", str(exc))
             messagebox.showerror("Fel", f"Kunde inte öppna mappen:\n{exc}")
 
     # ──────────────────────────────────────────────────────
@@ -791,13 +978,24 @@ LOGGOTYPMAPP:
         title = title.replace(" ", "_") or "etikett"
         out_path = _get_out_path(f"{label_type}_{title}.pdf")
 
-        c = canvas.Canvas(str(out_path), pagesize=A4, pageCompression=1)
-        if label_type == "index":
-            self.draw_index_labels(c, texts)
-        else:
-            self.draw_spine_labels(c, texts)
-        c.save()
+        try:
+            c = canvas.Canvas(str(out_path), pagesize=A4, pageCompression=1)
+            if label_type == "index":
+                self.draw_index_labels(c, texts)
+            else:
+                self.draw_spine_labels(c, texts)
+            c.save()
+        except Exception as exc:
+            LoggModule.logg.log_error("PDF_CREATE", str(exc))
+            messagebox.showerror(
+                "Fel", f"PDF kunde inte skapas:\n{exc}\n\nSe Loggar-fliken."
+            )
+            return None
 
+        LoggModule.logg.resolve_error("PDF_CREATE")
+        LoggModule.logg.log_app(
+            f"PDF skapad: {out_path.name} ({len(texts)} etiketter)"
+        )
         self.save_settings()
         messagebox.showinfo(
             "PDF skapad",
@@ -941,9 +1139,20 @@ LOGGOTYPMAPP:
         out_path = _get_out_path(
             VerifikatModule.verifikat_filename(year, count, period=period)
         )
-        c = canvas.Canvas(str(out_path), pagesize=A4, pageCompression=1)
-        self._draw_verifikat_labels(c, texts, width, height)
-        c.save()
+        try:
+            c = canvas.Canvas(str(out_path), pagesize=A4, pageCompression=1)
+            self._draw_verifikat_labels(c, texts, width, height)
+            c.save()
+        except Exception as exc:
+            LoggModule.logg.log_error("VERIFIKAT_CREATE", str(exc))
+            if show_message:
+                messagebox.showerror(
+                    "Fel", f"Verifikat kunde inte skapas:\n{exc}\n\nSe Loggar-fliken."
+                )
+            return None
+
+        LoggModule.logg.resolve_error("VERIFIKAT_CREATE")
+        LoggModule.logg.log_app(f"Verifikat skapad: {out_path.name} ({len(texts)} lappar)")
         self.save_settings()
 
         if show_message:
@@ -1059,9 +1268,21 @@ LOGGOTYPMAPP:
 
         entries = ArkivindexModule.build_index_entries(texts)
         out_path = _get_out_path(ArkivindexModule.arkivindex_filename())
-        ArkivindexModule.draw_arkivindex_pdf(
-            out_path, entries,
-            subtitle=f"Pärmetikett Generator {get_copyright_year()}",
+        try:
+            ArkivindexModule.draw_arkivindex_pdf(
+                out_path, entries,
+                subtitle=f"Pärmetikett Generator {get_copyright_year()}",
+            )
+        except Exception as exc:
+            LoggModule.logg.log_error("ARKIVINDEX_CREATE", str(exc))
+            messagebox.showerror(
+                "Fel", f"Arkivindex kunde inte skapas:\n{exc}\n\nSe Loggar-fliken."
+            )
+            return None
+
+        LoggModule.logg.resolve_error("ARKIVINDEX_CREATE")
+        LoggModule.logg.log_app(
+            f"Arkivindex skapat: {out_path.name} ({len(entries)} pärmar)"
         )
         self.save_settings()
         messagebox.showinfo(
@@ -1087,6 +1308,7 @@ LOGGOTYPMAPP:
             else:
                 subprocess.run(["xdg-open", str(path)], check=False)
         except Exception as exc:
+            LoggModule.logg.log_error("OPPNA_PDF", str(exc))
             messagebox.showerror("Öppningsfel", str(exc))
 
 
@@ -1095,16 +1317,29 @@ LOGGOTYPMAPP:
 # ──────────────────────────────────────────────────────────
 
 def main() -> None:
-    """Startar Pärmetikett Generator."""
+    """Startar Pärmetikett Generator (DPI-medveten, skarp, utan terminal)."""
     LabelModule.register_preferred_bold_font()
-    print(f"\n{'=' * 50}")
-    print(f"  Pärmetikett Generator {get_copyright_year()}")
-    print(f"  {get_copyright_notice()}")
-    print(f"{'=' * 50}\n")
-    print(f"[Export] 📤 Mapp: {LabelModule.get_export_folder()}")
+    # §11: DPI-medvetenhet FÖRE fönstret skapas → skarp text på hög-DPI.
+    dpi_enabled = SkarmModule.enable_dpi_awareness()
 
     saved = SettingsModule.load_settings()
     root = _create_root()
+    # §11: skalning + tydliga typsnitt efter skärmens DPI.
+    SkarmModule.apply_scaling(root)
+    SkarmModule.configure_fonts(root)
+
+    # Logotyp/ikon: appens vektorlogotyp som fönsterikon (överallt).
+    try:
+        if APP_LOGOTYP_ICON.is_file():
+            icon = tk.PhotoImage(file=str(APP_LOGOTYP_ICON))
+            root.iconphoto(True, icon)
+            root._app_icon_ref = icon  # hindra skräpsamling
+    except Exception as exc:
+        print(f"[Ikon] Kunde inte sätta fönsterikon: {exc}")
+
+    if not dpi_enabled:
+        print("[DPI] Windows-DPI-medvetenhet kunde inte aktiveras (no-op).")
+
     LabelGUI(root, saved)
     root.mainloop()
 

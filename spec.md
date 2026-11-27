@@ -5,9 +5,32 @@
 <!--
 ═══════════════════════════════════════════════════════════════════════════════
   © Copyright Rickard Längkvist {get_copyright_year()} - All rights reserved
-  Specifikation v6.2 — Sammanslagen & uppdaterad
+  Specifikation v6.3 — Sammanslagen & uppdaterad
   Senast uppdaterad: 2026-11-25
   Status: AKTIV UTVECKLING
+<!--
+  v6.3 — ÄNDRINGAR (2026-11-25, v1.2.0 — loggsystem + skärm/DPI)
+  ───────────────────────────────────────────────────────────────
+  · §8 Loggsystem: Script/loggar.py — LogManager med applog (INFO) och
+    fellog (aktiva fel, unika per kod). Åtgärdat fel tas bort automatiskt
+    (resolve_error) eller manuellt (clear_errors, Loggar-fliken).
+    Gårdagens poster arkiveras till Loggar/arkiv/<logg>_<datum>.jsonl;
+    arkiv raderas efter 7 dagar (daily_housekeeping vid start).
+  · Ny flik "Loggar" i GUI:t: fellogg-Treeview (sortera klick + flytta
+    drag via Script/gui_helpers.py §10) + applogg-vy.
+  · Loggningspunkter: LOGO_LOAD, LOGO_MARGIN, PDF_CREATE,
+    VERIFIKAT_CREATE, ARKIVINDEX_CREATE, SETTINGS_READ/SAVE, MAPPOPEN,
+    OPPNA_PDF.
+  · §11 Skärm/DPI: Script/skarm.py — SetProcessDpiAwarenessContext(-4)
+    (Windows, före fönstret), tk-scaling efter DPI, Segoe UI 10pt,
+    startgeometri = max höjd (skärm − taskbar-reserv) + anpassad bredd
+    (sparminnad) + centrerad. Fönsterikon = assets/app_logotyp_512.png.
+  · Appens logotyp: assets/app_logotyp.svg (redigerbar vektor för tryck)
+    + 512/128 px ikoner; knapp "Använd appens logotyp".
+  · Buggfix: _render_with_pymupdf öppnar SVG via filsökväg (stream gav
+    fel aspekt). Loggar/ tillagd i .gitignore.
+  · Tester: tests/test_loggar_skarm.py — 56 tester totalt.
+-->
 <!--
   v6.2 — ÄNDRINGAR (2026-11-25, v1.1.0 — från 25-förslagslistan)
   ───────────────────────────────────────────────────────────────

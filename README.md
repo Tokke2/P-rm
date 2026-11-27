@@ -6,6 +6,31 @@ verifikatetiketter för ett helt år.
 
 ## Nya förbättringar
 
+### v1.2.0 — loggsystem (§8) + skärm/DPI-paket (§11)
+
+* **Komplett loggsystem** — ny flik **Loggar**:
+  * **Fellogg** visar alla **aktiva fel** — när ett fel åtgärdats (t.ex.
+    lyckad logotypinläsning) försvinner det **automatiskt**; fel kan också
+    **rensas manuellt** (valda eller alla)
+  * **Applogg** sparar händelser: skapade PDF:er, valda logotyper, städning
+  * **Gårdagens loggposter arkiveras** till `Loggar/arkiv/`, och arkiverade
+    loggar **raderas automatiskt efter 7 dagar** (vid varje appstart)
+  * Felloggens kolumner kan **sorteras** (klick på kolumnhuvud) och
+    **flyttas** (dra huvudet) enligt §10
+* **Skärm & skärpa (§11)**:
+  * **DPI-medveten** start på Windows (`SetProcessDpiAwarenessContext`) —
+    skarp text på 4K/hög skärmskalning, ingen grumlig rendering
+  * Fönstret startar i **max höjd-läge** anpassat efter skärmen (minus
+    taskbar) med **anpassad bredd** (sparad bredd minns), centrerad
+  * Tydligare typsnitt (Segoe UI + skalning efter DPI)
+* **Appens logotyp som vektor för tryck** — `assets/app_logotyp.svg`
+  (redigerbar) + kvadratisk PNG-ikon som används som **fönsterikon**; ny
+  knapp **⭐ Använd appens logotyp** lägger den direkt på etiketterna
+* **Buggfix (SVG)**: PyMuPDF-rendering av SVG öppnas nu via filsökväg —
+  korrekt proportioner på kvadratiska SVG-logotyper (tidigare kunde
+  sidhöjden bli fel via stream-öppning)
+* Kör i Windows utan terminalfönster: starta med `pythonw.exe` (§9)
+
 ### v1.1.0 — nya funktioner (förslag från 25-listan)
 
 * **Checkruta per etikettrad** — kryssa för exakt vilka rader som ska
