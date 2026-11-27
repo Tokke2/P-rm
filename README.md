@@ -6,6 +6,28 @@ PDF-etiketter för pärmar och arkivering: ryggetiketter (41×64 mm /
 
 ## Nya förbättringar
 
+### v1.10.1 — logotypfix: PyMuPDF ingår — Inkscape är aldrig ett krav
+
+* **Beroende (§4): `PyMuPDF>=1.24` tillagd i requirements.txt** — den
+  inbyggda logotypmotorn. SVG/PDF-logotyper fungerar nu efter en enkel
+  `pip install -r requirements.txt`, **utan Inkscape, Ghostscript eller
+  andra externa verktyg** (Inkscape är aldrig ett krav — bara valfri
+  fallback tillsammans med cairosvg/poppler).
+* SVG-kedjan är nu **PyMuPDF → cairosvg → Inkscape** (PyMuPDF först;
+  var verifierad offline med riktig SVG-rendering: synliga pixlar +
+  logotypen syns i genererad PDF även med fyll-läget).
+* **Ritfel syns nu på Loggar-fliken** (kod LOGO_DRAW) istället för tysta
+  konsolutskrifter — en logotyp som inte kan ritas kan aldrig försvinna
+  utan spår.
+* Hjälp-fliken visar nu **"Logotypmotor: PyMuPDF ✓ (ingår — inga externa
+  verktyg krävs; Inkscape är aldrig ett krav)"** (eller tydlig instruktion
+  om PyMuPDF saknas).
+* **Viktigt för updaterade installationer:** updateraren kopierar filer
+  men installerar inte Python-paket — kör en gång:
+  `python -m pip install -r requirements.txt`
+* Tester: 6 nya (inkl. två riktiga SVG→PNG→PDF-renderingstester) —
+  **167 st totalt**.
+
 ### v1.10.0 — Tjock rygg som standard + Inställningar-flik + text fyller alltid etiketten
 
 * **Tjock rygg är standard** (57×64 mm) — Smal/Index väljs som vanligt;

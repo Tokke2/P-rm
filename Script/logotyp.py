@@ -8,7 +8,7 @@
 #
 # Konverteringar använder, i prioritetsordning:
 #   PDF  : PyMuPDF → Ghostscript → Inkscape → pdftoppm (poppler)
-#   SVG  : Inkscape → cairosvg → PyMuPDF
+#   SVG  : PyMuPDF → cairosvg → Inkscape  (PyMuPDF ingår — inga krav)
 #   EPS  : Ghostscript → Inkscape
 #   AI   : samma som EPS
 #   Övrigt: Pillow (PNG, JPG, BMP, GIF, TIFF, WEBP …)
@@ -424,14 +424,15 @@ def convert_svg_to_png(svg_path: str, width_px: int) -> Optional[str]:
     if not source.is_file():
         return None
 
-    # 1) Inkscape.
+    # 1) PyMuPDF — HUVUDVÄG (ingår i requirements; inga externa
+    #    verktyg behövs. Inkscape är aldrig ett krav, bara fallback.)
     out = _new_temp_png()
-    if _inkscape_export(str(source), out, width_px):
-        print(f"[SVG] ✓ Konverterad med Inkscape ({width_px} px)")
+    if _render_with_pymupdf(source, out, width_px, svg=True):
+        print(f"[SVG] ✓ Konverterad med PyMuPDF ({width_px} px)")
         return out
     _remove(out)
 
-    # 2) cairosvg.
+    # 2) cairosvg (valfritt extra).
     cairosvg = _cairosvg_module()
     if cairosvg:
         out = _new_temp_png()
@@ -446,16 +447,16 @@ def convert_svg_to_png(svg_path: str, width_px: int) -> Optional[str]:
             print(f"[SVG] cairosvg misslyckades: {exc}")
         _remove(out)
 
-    # 3) PyMuPDF kan läsa SVG via konvertering till PDF.
+    # 3) Inkscape (valfritt extra — ALDRIG ett krav).
     out = _new_temp_png()
-    if _render_with_pymupdf(source, out, width_px, svg=True):
-        print(f"[SVG] ✓ Konverterad med PyMuPDF ({width_px} px)")
+    if _inkscape_export(str(source), out, width_px):
+        print(f"[SVG] ✓ Konverterad med Inkscape ({width_px} px)")
         return out
     _remove(out)
 
     print(
-        "[SVG] ✗ Kunde inte läsa SVG-logotypen. Installera Inkscape, "
-        "cairosvg (pip install cairosvg) eller PyMuPDF."
+        "[SVG] ✗ Kunde inte läsa SVG-logotypen. Installera PyMuPDF "
+        "(python -m pip install pymupdf) — kräver inga externa verktyg."
     )
     return None
 

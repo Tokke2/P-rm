@@ -282,12 +282,16 @@ def apply_language(window) -> None:
 def build_help_text() -> str:
     """Hjälp-texten på aktuellt GUI-språk (sv/en)."""
     tools = LogoModule.check_tools()
-    tool_text = (
-        f"PyMuPDF (PDF): {'✓' if tools['pymupdf'] else '✗'}, "
-        f"Ghostscript: {'✓' if tools['ghostscript'] else '✗'}, "
-        f"Inkscape: {'✓' if tools['inkscape'] else '✗'}, "
-        f"cairosvg: {'✓' if tools['cairosvg'] else '✗'}"
-    )
+    if tools["pymupdf"]:
+        tool_text = (
+            "Logotypmotor: PyMuPDF ✓ (ingår — inga externa verktyg "
+            "krävs; Inkscape är aldrig ett krav)"
+        )
+    else:
+        tool_text = (
+            "Logotypmotor: PyMuPDF ✗ SAKNAS — kör: "
+            "python -m pip install pymupdf"
+        )
     export_folder = LabelModule.get_export_folder()
     if CURRENT_LANGUAGE == "en":
         return f"""
@@ -299,7 +303,7 @@ LOGOS:
   • PDF (first page), SVG, EPS, AI and raster
     (PNG, JPG, BMP, GIF, TIFF, WEBP)
   • Vector logos are rendered to high-resolution PNG
-  • Conversion tools: {tool_text}
+  • {tool_text}
 
 LABEL TYPES:
   • Slim spine: 41 × 64 mm
@@ -361,7 +365,7 @@ LOGOTYPER:
   • PDF (första sidan), SVG, EPS, AI och raster
     (PNG, JPG, BMP, GIF, TIFF, WEBP)
   • Vektorlogotyper renderas till högupplöst PNG
-  • Konverteringsverktyg: {tool_text}
+  • {tool_text}
 
 ETIKETTYPER:
   • Rygg Smal:  41 × 64 mm

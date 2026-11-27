@@ -5,10 +5,27 @@
 <!--
 ═══════════════════════════════════════════════════════════════════════════════
   © Copyright Rickard Längkvist {get_copyright_year()} - All rights reserved
-  Specifikation v7.7 — Sammanslagen & uppdaterad
+  Specifikation v7.8 — Sammanslagen & uppdaterad
   Senast uppdaterad: 2026-11-27
   Status: AKTIV UTVECKLING
 <!--
+  v7.8 — ÄNDRINGAR (2026-11-27, v1.10.1 — logotyp utan Inkscape-krav)
+  ───────────────────────────────────────────────────────────────
+  · RAPPORTERAT: "logotypen syns ej / följde inte med" + "ska ej ha
+    inkscape som ett krav".
+  · ORSAK: PyMuPDF fanns EJ i requirements.txt (updateraren kopierar
+    inte pip-paket) och SVG-kedjan ledde med Inkscape/cairosvg först —
+    utan externa verktyg blev logotypen tyst borta.
+  · FIX: PyMuPDF>=1.24 i requirements.txt; SVG-kedjan = PyMuPDF →
+    cairosvg → Inkscape (alla valfria utom PyMuPDF som ingår);
+    ritfel → log_error("LOGO_DRAW") på Loggar-fliken; hjälptexten visar
+    "Logotypmotor: PyMuPDF ✓ (ingår — inga externa verktyg krävs)".
+  · Sandbox-verifierat: SVG → PNG (191 881 synliga pixlar) → logotyp
+    syns i genererad PDF (1 548 orangea pixlar) även med fill_text.
+  · ANVÄNDARE MÅSTE KÖRA: python -m pip install -r requirements.txt
+    (updaterarens file-copy installerar inte paket).
+  · Tester: 6 nya (2 riktiga renderings-tester) — 167 totalt.
+-->
   v7.7 — ÄNDRINGAR (2026-11-27, v1.10.0 — tjock-rygg + inställningsflik + fill)
   ───────────────────────────────────────────────────────────────
   · STANDARD: label_type = "rygg_tjock" i DEFAULT_SETTINGS + alla

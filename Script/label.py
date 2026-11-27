@@ -445,6 +445,11 @@ def draw_logo_on_page(
         )
         return height_pt + top_gap
     except Exception as exc:
+        try:
+            from Script import loggar as _log
+            _log.logg.log_error("LOGO_DRAW", f"Logotypen kunde inte ritas: {exc}")
+        except Exception:
+            pass
         print(f"[Logo] Fel vid ritning: {exc}")
         return 0.0
 
