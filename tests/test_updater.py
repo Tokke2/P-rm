@@ -344,5 +344,135 @@ class RunUpdateTests(unittest.TestCase):
         )
 
 
+class AutoUpdTests(unittest.TestCase):
+    """Auto-uppdatering 00:00 varje dag (schemaläggning + tyst flöde)."""
+
+    def setUp(self) -> None:
+        self.tmp = tempfile.TemporaryDirectory()
+        self.app = Path(self.tmp.name) / "app"
+        self.app.mkdir()
+        _write(self.app, "VERSION.txt", "1.2.0\n")
+        self.logg = loggar.LogManager(Path(self.tmp.name) / "Loggar")
+
+    def tearDown(self) -> None:
+        self.tmp.cleanup()
+
+    def _fake_archive(self, tag: str, dest_dir: Path) -> Path:
+        staging = Path(self.tmp.name) / "staging" / f"P-rm-{tag.lstrip('v')}"
+        _write(staging, "VERSION.txt", tag.lstrip("v") + "\n")
+        _write(staging, "folder.py", "AUTO-UPPDATERAD")
+        dest_dir.mkdir(parents=True, exist_ok=True)
+        archive = dest_dir / "release.tar.gz"
+        with tarfile.open(archive, "w:gz") as tar:
+            tar.add(staging, arcname=staging.name)
+        return archive
+
+    # ── next_midnight_delay (pure, tidsinjektion) ────────
+    def test_delay_daytime_is_until_next_midnight(self) -> None:
+        from datetime import datetime
+
+        noon = datetime(2026, 11, 25, 12, 0, 0)
+        self.assertEqual(updater.next_midnight_delay(noon), 12 * 3600 * 1000)
+        late = datetime(2026, 11, 25, 23, 59, 0)
+        self.assertEqual(updater.next_midnight_delay(late), 60 * 1000)
+        evening = datetime(2026, 11, 25, 22, 0, 0)
+        self.assertEqual(updater.next_midnight_delay(evening), 2 * 3600 * 1000)
+
+    def test_delay_catchup_right_after_midnight(self) -> None:
+        from datetime import datetime
+
+        self.assertEqual(updater.next_midnight_delay(
+            datetime(2026, 11, 25, 0, 0, 0)), 0)
+        self.assertEqual(updater.next_midnight_delay(
+            datetime(2026, 11, 25, 0, 3, 0)), 0)  # inom 5-min-fönstret
+
+    def test_delay_just_after_catchup_window(self) -> None:
+        from datetime import datetime
+
+        delay = updater.next_midnight_delay(datetime(2026, 11, 25, 0, 6, 0))
+        expected = int(23 * 3600 * 1000 + 54 * 60 * 1000)
+        self.assertAlmostEqual(delay, expected, delta=1500)
+
+    def test_delay_with_custom_catchup_window(self) -> None:
+        from datetime import datetime
+
+        self.assertEqual(updater.next_midnight_delay(
+            datetime(2026, 11, 25, 0, 10, 0), catchup_minutes=15), 0)
+
+    # ── auto_update: tyst flöde, alltid loggning ─────────
+    def test_auto_update_applies_new_release_silently(self) -> None:
+        info = {"tag": "v1.3.0", "name": "T", "target_commitish":
+                "arena/684c29e9-p-rm"}
+        result = updater.auto_update(
+            self.app,
+            log=self.logg,
+            fetch_info=lambda: info,
+            download_archive=self._fake_archive,
+        )
+        self.assertTrue(result["ok"] and result["uppdaterad"])
+        self.assertEqual(
+            (self.app / "VERSION.txt").read_text(encoding="utf-8").strip(),
+            "1.3.0",
+        )
+        messages = [entry["meddelande"] for entry in self.logg.recent_app(50)]
+        self.assertTrue(any("AUTO-UPD: schemalagd" in m for m in messages))
+        self.assertTrue(any("AUTO-UPD: uppdaterade till v1.3.0" in m for m in messages))
+        # Inga aktiva UPD-fel efter lyckad auto-uppdatering:
+        self.assertEqual(
+            [e for e in self.logg.active_errors()
+             if e["kod"].startswith("UPD")], []
+        )
+
+    def test_auto_update_no_update_needed(self) -> None:
+        info = {"tag": "v1.2.0", "name": "T", "target_commitish":
+                "arena/684c29e9-p-rm"}
+        result = updater.auto_update(
+            self.app,
+            log=self.logg,
+            fetch_info=lambda: info,
+            download_archive=self._fake_archive,
+        )
+        self.assertTrue(result["ok"] and not result["uppdaterad"])
+        messages = [entry["meddelande"] for entry in self.logg.recent_app(50)]
+        self.assertTrue(any("AUTO-UPD: ingen uppdatering behövs" in m for m in messages))
+
+    def test_auto_update_failure_goes_to_error_log(self) -> None:
+        def fel_info():
+            raise OSError("nätet borta")
+
+        result = updater.auto_update(
+            self.app, log=self.logg, fetch_info=fel_info,
+        )
+        self.assertFalse(result["ok"])
+        active_codes = [e["kod"] for e in self.logg.active_errors()]
+        self.assertIn("UPD_CHECK", active_codes)
+
+    def test_auto_update_refuses_main(self) -> None:
+        info = {"tag": "v9.9.9", "name": "T", "target_commitish": "main"}
+        result = updater.auto_update(
+            self.app, log=self.logg, fetch_info=lambda: info,
+        )
+        self.assertFalse(result["ok"])
+        self.assertIn("main", result["fel"])
+        # Inget ändrat:
+        self.assertEqual(
+            (self.app / "VERSION.txt").read_text(encoding="utf-8").strip(),
+            "1.2.0",
+        )
+
+    def test_settings_auto_update_roundtrip(self) -> None:
+        from Script import settings_store
+
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "settings.json"
+            data = settings_store.load_settings(path)
+            self.assertTrue(data["auto_update_daily"])  # default på
+            data["auto_update_daily"] = False
+            settings_store.save_settings(data, path)
+            self.assertFalse(
+                settings_store.load_settings(path)["auto_update_daily"]
+            )
+
+
 if __name__ == "__main__":
     unittest.main()

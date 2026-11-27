@@ -20,7 +20,9 @@ import json
 import shutil
 import tarfile
 import tempfile
+import threading
 import urllib.request
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
@@ -43,6 +45,12 @@ SKIP_FILES = {"settings.json"}
 
 INFO_TIMEOUT = 15
 DOWNLOAD_TIMEOUT = 120
+
+# Auto-uppdatering 00:00 varje dag: missad midnatt catchas upp om appen
+# startar inom denna fönstertid efter midnatt.
+CATCHUP_WINDOW_MIN = 5
+
+_UPDATE_LOCK = threading.Lock()  # serialiserar auto + manuell uppdatering
 
 
 class UpdaterError(Exception):
@@ -292,6 +300,66 @@ def apply_update(
 # ORKESTRERING
 # ──────────────────────────────────────────────────────────
 
+def next_midnight_delay(
+    now: Optional[datetime] = None,
+    catchup_minutes: int = CATCHUP_WINDOW_MIN,
+) -> int:
+    """Millisekunder till nästa 00:00 (för auto-uppdateringsschemat).
+
+    Startar appen inom *catchup_minutes* efter midnatt returneras 0 —
+    den missade körningen utförs då direkt (uppcatchning). Pure funktion
+    (injicera `now`) så den kan testas utan verklig klocka.
+    """
+    now = now or datetime.now()
+    midnight = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    since_midnight = (now - midnight).total_seconds()
+    if since_midnight <= catchup_minutes * 60:
+        return 0
+    next_midnight = midnight + timedelta(days=1)
+    return int((next_midnight - now).total_seconds() * 1000)
+
+
+def auto_update(
+    current_root: Path = APP_ROOT,
+    log: Any = None,
+    fetch_info: Optional[Callable[[], Dict[str, str]]] = None,
+    download_archive: Optional[Callable[[str, Path], Path]] = None,
+) -> Dict[str, Any]:
+    """Tyst auto-uppdatering (00:00-schemaläggarens anrop).
+
+    Samma flöde som run_update men ALDRIG några dialoger — allting
+    loggas i loggsystemet (applog vid lyckat/ingenting, fellog vid fel).
+    """
+    if log is None:
+        try:
+            from Script import loggar as _loggar
+        except ImportError:
+            import loggar as _loggar  # type: ignore[no-redef]
+        log = _loggar.logg
+    log.log_app("AUTO-UPD: schemalagd uppdatering (00:00) startar")
+    try:
+        result = run_update(
+            current_root,
+            fetch_info=fetch_info,
+            download_archive=download_archive,
+            log=log,
+        )
+    except Exception as exc:
+        log.log_error("UPD_AUTO", f"Auto-uppdatering kraschade: {exc}")
+        return {"ok": False, "steg": "auto", "fel": str(exc)}
+    if result.get("ok") and result.get("uppdaterad"):
+        log.log_app(
+            f"AUTO-UPD: uppdaterade till {result.get('tag')} — "
+            "starta om appen för att ändringarna ska gälla"
+        )
+    elif result.get("ok"):
+        log.log_app("AUTO-UPD: ingen uppdatering behövs")
+    else:
+        log.log_error(
+            "UPD_AUTO", f"Auto-uppdatering misslyckades: {result.get('fel')}"
+        )
+    return result
+
 def check_for_new_release(
     fetch_info: Optional[Callable[[], Dict[str, str]]] = None,
     version_path: Path = VERSION_PATH,
@@ -326,6 +394,22 @@ def run_update(
     `fetch_info`/`download_archive` kan injiceras i tester (offline).
     `log` är en LogManager (standard: Script.loggar.logg).
     """
+    with _UPDATE_LOCK:  # auto + manuell ska aldrig köras samtidigt
+        return _run_update_locked(
+            current_root,
+            fetch_info=fetch_info,
+            download_archive=download_archive,
+            log=log,
+        )
+
+
+def _run_update_locked(
+    current_root: Path,
+    *,
+    fetch_info: Optional[Callable[[], Dict[str, str]]] = None,
+    download_archive: Optional[Callable[[str, Path], Path]] = None,
+    log: Any = None,
+) -> Dict[str, Any]:
     if log is None:
         try:
             from Script import loggar as _loggar
@@ -412,4 +496,5 @@ __all__ = [
     "get_latest_release_info", "download_release_archive",
     "extract_archive", "build_file_hashes", "compare_files",
     "apply_update", "check_for_new_release", "run_update",
+    "next_midnight_delay", "auto_update", "CATCHUP_WINDOW_MIN",
 ]

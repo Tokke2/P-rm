@@ -6,6 +6,22 @@ verifikatetiketter för ett helt år.
 
 ## Nya förbättringar
 
+### v1.4.0 — auto-uppdatering 00:00 varje dag (REQ-K4)
+
+* **Auto-uppdatering varje midnatt**: appen kör REQ-K4-uppdateringen
+  automatiskt kl **00:00** om en nyare Latest-release finns — helt tyst,
+  inga dialoger på natten, allting loggas i apploggen/felloggen
+* **Uppecatchning**: startar du appen inom 5 minuter efter 00:00 utförs
+  den missade körningen direkt
+* Av/på via checkboxen **"🕒 Auto-uppdatering 00:00 varje dag"** i
+  vänsterpanelen (standard: **på**), sparas i settings.json
+  (`auto_update_daily`)
+* Samma säkerhet som manuell uppdatering: filjämförelse (sha256), backup
+  tas bort först vid verifierad uppdatering, rollback vid fel, main-releaser
+  vägras
+* Serialiseringslås — auto- och manuell uppdatering kan aldrig köras
+  samtidigt
+
 ### v1.3.0 — uppdaterare i appen (REQ-K4, §3)
 
 * **Ny knapp "⬇️ Sök uppdatering (REQ-K4)"** i vänsterpanelen:

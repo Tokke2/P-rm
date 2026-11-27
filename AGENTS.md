@@ -138,7 +138,10 @@ appens teknik (se §12).
   i `Script/label.py` → subflik aktuell här); ruttvalet/"valet av ruta"
   från ttk-versionens projektskapare ska återinföras **enbart i appar
   som faktiskt hade det** i sin ttk-version.
-* **Updater**: säkrare och bättre (se §3).
+* **Updater**: säkrare och bättre (se §3); **auto-uppdatering 00:00 varje
+  dag** — appen kör REQ-K4-uppdateringen automatiskt vid midnatt om en
+  nyare Latest-release finns (tyst, loggas i apploggen; missad midnatt
+  uppcatchas om appen startar inom 5 minuter efter 00:00).
 
 ## 12. Anpassning per app
 

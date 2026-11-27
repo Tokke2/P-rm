@@ -5,9 +5,27 @@
 <!--
 ═══════════════════════════════════════════════════════════════════════════════
   © Copyright Rickard Längkvist {get_copyright_year()} - All rights reserved
-  Specifikation v6.4 — Sammanslagen & uppdaterad
+  Specifikation v6.5 — Sammanslagen & uppdaterad
   Senast uppdaterad: 2026-11-25
   Status: AKTIV UTVECKLING
+<!--
+  v6.5 — ÄNDRINGAR (2026-11-25, v1.4.0 — auto-uppdatering 00:00)
+  ───────────────────────────────────────────────────────────────
+  · updater.next_midnight_delay(): ms till nästa 00:00 (pure, tids-
+    injektion); uppcatchning → 0 om appen startar inom 5 min efter
+    midnatt (CATCHUP_WINDOW_MIN).
+  · updater.auto_update(): tyst flöde (ALDRIG dialoger) — loggar i
+    applog (start/klar/ingen ändring) och fellog (UPD_AUTO/UPD_CHECK).
+  · updater.run_update(): serialiseringslås _UPDATE_LOCK (threading) —
+    auto + manuell aldrig samtidigt.
+  · folder.py: schemaläggare via root.after(delay, trigger) + tråd +
+    queue-poll; reschemalägger efter varje körning; checkbox
+    "Auto-uppdatering 00:00 varje dag" (settings: auto_update_daily,
+    default True).
+  · AGENTS.md §11: auto-uppdatering 00:00 varje dag dokumenterad.
+  · Tester: 9 nya (tidslogik + tysta flöden) — 82 totalt.
+-->
+
 <!--
   v6.4 — ÄNDRINGAR (2026-11-25, v1.3.0 — uppdaterare REQ-K4)
   ───────────────────────────────────────────────────────────────

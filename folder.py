@@ -192,6 +192,10 @@ class LabelGUI:
         self.logo_contrast_var = tk.BooleanVar(
             value=bool(self.saved.get("logo_contrast", False))
         )
+        # Auto-uppdatering 00:00 varje dag (REQ-K4).
+        self.auto_update_var = tk.BooleanVar(
+            value=bool(self.saved.get("auto_update_daily", True))
+        )
 
         initial_top = self._clamp(self.saved.get("logo_top_px", 5), 0, 100)
         self.logo_top_px_var = tk.IntVar(value=initial_top)
@@ -236,6 +240,12 @@ class LabelGUI:
             target=self._auto_check_updates, daemon=True
         ).start()
 
+        # Auto-uppdatering 00:00 varje dag (om inställningen är påslagen):
+        # schemalägger nästa midnatt; uppcatchar missad midnatt inom 5 min.
+        self._auto_upd_queue: "queue.Queue[dict]" = queue.Queue()
+        if self.auto_update_var.get():
+            self._schedule_auto_update()
+
     @staticmethod
     def _clamp(value, minimum: int, maximum: int) -> int:
         try:
@@ -264,6 +274,7 @@ class LabelGUI:
             "barcode_labels": bool(self.barcode_var.get()),
             "corner_marks": bool(self.corner_marks_var.get()),
             "logo_contrast": bool(self.logo_contrast_var.get()),
+            "auto_update_daily": bool(self.auto_update_var.get()),
             "label_count": self.antal_var.get(),
             "last_logo_path": self.logo_path or "",
             "window_geometry": self.root.geometry(),
@@ -452,6 +463,11 @@ class LabelGUI:
             left, text="⬇️ Sök uppdatering (REQ-K4)",
             command=self.check_updates_clicked,
         ).pack(fill="x", pady=2)
+        ttk.Checkbutton(
+            left, text="🕒 Auto-uppdatering 00:00 varje dag",
+            variable=self.auto_update_var,
+            command=self._on_auto_update_toggled,
+        ).pack(anchor="w", pady=(0, 2))
 
         ttk.Separator(left, orient="horizontal").pack(fill="x", pady=10)
 
@@ -615,6 +631,10 @@ UPDATER (REQ-K4, §3):
   • Releaser som pekar på 'main' uppdateras aldrig (§1)
   • Tyst kontroll vid start (loggas i apploggen) — nedladdning sker
     först när du klickar 'Sök uppdatering'
+  • AUTO-UPDATERING 00:00: varje midnatt körs uppdateringen automatiskt
+    (om en nyare release finns) — helt tyst, loggas i apploggen; missad
+    midnatt uppcatchas om appen startar inom 5 minuter efter 00:00.
+    Av/på-knapp i vänsterpanelen.
 
 UPDATER (REQ-K4, §3):
   • 'Sök uppdatering' jämför filer (namn + sha256) mot senaste
@@ -889,6 +909,49 @@ LOGGOTYPMAPP:
             self._show_update_result(result)
 
         self.root.after(150, poll)
+
+    def _on_auto_update_toggled(self) -> None:
+        """(Av)aktiverar 00:00-auto-uppdateringen direkt + sparar."""
+        self.save_settings()
+        if self.auto_update_var.get():
+            LoggModule.logg.log_app("Auto-uppdatering 00:00 påslagen")
+            self._schedule_auto_update()
+        else:
+            LoggModule.logg.log_app("Auto-uppdatering 00:00 avslagen")
+
+    def _schedule_auto_update(self) -> None:
+        """Schemalägger nästa 00:00-auto-uppdatering (uppcatchning = nu)."""
+        if not self.auto_update_var.get():
+            return
+        delay_ms = UpdaterModule.next_midnight_delay()
+        self.root.after(max(0, delay_ms), self._trigger_auto_update)
+
+    def _trigger_auto_update(self) -> None:
+        """Kör tyst auto-uppdatering i bakgrund (00:00 eller uppcatchning)."""
+        if not self.auto_update_var.get():
+            return
+        threading.Thread(
+            target=lambda: self._auto_upd_queue.put(
+                UpdaterModule.auto_update()
+            ),
+            daemon=True,
+        ).start()
+        self.root.after(200, self._poll_auto_update)
+
+    def _poll_auto_update(self) -> None:
+        """Hämtar auto-uppdateringsresultat (main-thread) + schemalägger om."""
+        if self._auto_upd_queue.empty():
+            self.root.after(300, self._poll_auto_update)
+            return
+        result = self._auto_upd_queue.get_nowait()
+        if result.get("uppdaterad"):
+            status = f"uppdaterad till {result.get('tag')}"
+        elif result.get("ok"):
+            status = "ingen uppdatering behövs"
+        else:
+            status = f"misslyckades ({result.get('fel', 'okänt')})"
+        LoggModule.logg.log_app(f"AUTO-UPD klar: {status}")
+        self._schedule_auto_update()  # nästa midnatt
 
     def _show_update_result(self, result: dict) -> None:
         """Visar uppdateringsresultat för användaren."""

@@ -31,6 +31,7 @@ DEFAULT_SETTINGS: Dict[str, Any] = {
     "barcode_labels": False,      # Code 128-B på etiketter   (förslag #2)
     "corner_marks": False,        # förstärkta hörnmarkeringar (förslag #22)
     "logo_contrast": False,       # automatisk logotypkontrast (förslag #16)
+    "auto_update_daily": True,    # auto-uppdatering 00:00 varje dag (REQ-K4)
     "last_logo_path": "",
     "window_geometry": "",
 }
