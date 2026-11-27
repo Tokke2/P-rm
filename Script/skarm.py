@@ -92,6 +92,27 @@ def compute_start_geometry(
     return f"{width}x{height}+{x}+{y}"
 
 
+def ensure_no_console_streams() -> bool:
+    """Skyddar print vid start utan konsol (pythonw, §9).
+
+    Windows startar pythonw.exe utan stdout/stderr — ett enda print()
+    skulle då krascha appen (AttributeError). Denna funktion dirigerar
+    None-strömmarna till devnull. Anropas FÖRST i main(). Returnerar
+    True om någon ström behövde omdirigeras.
+    """
+    redirected = False
+    import os
+
+    for stream_name in ("stdout", "stderr"):
+        if getattr(sys, stream_name) is None:
+            setattr(
+                sys, stream_name,
+                open(os.devnull, "w", encoding="utf-8")
+            )
+            redirected = True
+    return redirected
+
+
 def apply_scaling(root: object) -> Optional[float]:
     """Sätter Tk-scaling efter skärmens DPI (tydligare, större text).
 
@@ -134,6 +155,7 @@ __all__ = [
     "PREFERRED_RATIO",
     "MAX_WIDTH",
     "enable_dpi_awareness",
+    "ensure_no_console_streams",
     "parse_geometry",
     "compute_start_geometry",
     "apply_scaling",

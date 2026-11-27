@@ -21,11 +21,12 @@ from __future__ import annotations
 import os
 import shutil
 import subprocess
+import sys
 import tempfile
 import traceback
 from datetime import datetime
 from pathlib import Path
-from typing import Any, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 from PIL import Image
 
@@ -186,10 +187,20 @@ def _remove(path: Optional[str]) -> None:
 
 
 def _run(command: List[str], timeout: int = 120) -> bool:
-    """Kör ett externt kommando och returnerar True vid noll exitkod."""
+    """Kör ett externt kommando och returnerar True vid noll exitkod.
+
+    §9: på Windows med CREATE_NO_WINDOW så att konverteringsverktyg
+    (skanning av logotyper m.m.) ALDRIG blinkar ett terminalfönster.
+    """
     try:
+        popen_kwargs: Dict[str, Any] = {}
+        if sys.platform.startswith("win"):
+            popen_kwargs["creationflags"] = getattr(
+                subprocess, "CREATE_NO_WINDOW", 0x08000000
+            )
         result = subprocess.run(
-            command, capture_output=True, text=True, timeout=timeout
+            command, capture_output=True, text=True, timeout=timeout,
+            **popen_kwargs,
         )
         if result.returncode != 0:
             detail = (result.stderr or result.stdout or "").strip()[:400]

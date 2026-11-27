@@ -5,9 +5,31 @@
 <!--
 ═══════════════════════════════════════════════════════════════════════════════
   © Copyright Rickard Längkvist {get_copyright_year()} - All rights reserved
-  Specifikation v6.6 — Sammanslagen & uppdaterad
+  Specifikation v6.7 — Sammanslagen & uppdaterad
   Senast uppdaterad: 2026-11-25
   Status: AKTIV UTVECKLING
+<!--
+  v6.7 — ÄNDRINGAR (2026-11-25, v1.5.0 — Qt6-version + autostart)
+  ───────────────────────────────────────────────────────────────
+  · NY GUI-fil folder_qt.py (PySide6): exakt samma layout/funktioner som
+    folder.py (tkinter) — flikar Generator/Hjälp/Loggar, vänsterpanel,
+    etikettrader med checkrutor, verifikat/arkivindex/updater. Qt-fördelar:
+    automatisk hög-DPI (§11), inbyggd sortering + kolumnflyttning i
+    Loggar-tabellen (§10), QSS-design i logotypfärgerna.
+  · Script/autostart.py: enable/disable/is/get — HKCU Run-nyckel med
+    pythonw.exe (ingen konsol, §9); winreg injicerbart för tester.
+  · Script/skarm.ensure_no_console_streams(): sys.stdout/stderr → devnull
+    om None (pythonw-skydd) — anropas FÖRST i folder.py main() och
+    folder_qt.py-modulstarten.
+  · Script/logotyp._run: CREATE_NO_WINDOW på Windows — skanning/konvertering
+    blinkar aldrig terminalfönster (§9).
+  · requirements.txt: PySide6>=6.6 tillagd (§4 — meddelas i release);
+    folder.py (tkinter) fortsätter fungera utan den.
+  · Tester: 20 nya — 105 totalt. Qt-GUI instansieras inte i sandbox
+    (libGL saknas) → statisk AST/sträng-audit + riktiga offscreen-tester
+    kan köras där Qt finns.
+-->
+
 <!--
   v6.6 — ÄNDRINGAR (2026-11-25, v1.4.1 — P0-startkrasch på Windows)
   ───────────────────────────────────────────────────────────────

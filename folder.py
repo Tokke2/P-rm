@@ -1496,6 +1496,8 @@ LOGGOTYPMAPP:
 
 def main() -> None:
     """Startar Pärmetikett Generator (DPI-medveten, skarp, utan terminal)."""
+    # §9: pythonw startar utan stdout/stderr — skydda print direkt.
+    SkarmModule.ensure_no_console_streams()
     LabelModule.register_preferred_bold_font()
     # §11: DPI-medvetenhet FÖRE fönstret skapas → skarp text på hög-DPI.
     dpi_enabled = SkarmModule.enable_dpi_awareness()

@@ -6,6 +6,34 @@ verifikatetiketter för ett helt år.
 
 ## Nya förbättringar
 
+### v1.5.0 — Qt6-version med samma layout + autostart + helt utan terminal
+
+* **Ny Qt6-version** (`folder_qt.py`, PySide6) — **exakt samma layout och
+  funktioner** som tkinter-versionen (samma flikar Generator/Hjälp/Loggar,
+  samma paneler och knappar), med:
+  * **Automatisk hög-DPI-skärpa** (Qt6 skalar själv → skarpast möjliga
+    text på 4K/skalning, §11)
+  * **QSS-design i logotypens färger** (djupblå #1E3A5F + orange #F6A03C)
+  * Loggar-tabellen har **inbyggd sortering (klick) och kolumnflyttning
+    (dra)** — ännu smidigare än tkinter-versionen (§10)
+  * Samma updater (REQ-K4) + **auto-uppdatering 00:00** + tyst startkontroll
+  * Startar i max höjd-läge med anpassad bredd (`availableGeometry` =
+    skärm minus taskbar, §11)
+* **Autostart vid inloggning** (ny checkbox): skapar Windows
+  autostart-post med **pythonw.exe** → appen startar automatiskt vid
+  inloggning **utan terminal** (`Script/autostart.py`, HKCU Run-nyckel)
+* **Helt utan terminal (§9)**:
+  * `pythonw.exe` används av autostart (ingen konsol vid start)
+  * **Skanning/konvertering** (PyMuPDF/Ghostscript/Inkscape) körs nu med
+    `CREATE_NO_WINDOW` på Windows — konsolfönstret **blinkar aldrig**
+  * pythonw-skydd: `sys.stdout/stderr` omdirigeras om de saknas (print
+    kraschar inte längre vid terminalfri start) — i båda versionerna
+* **Kör Qt-versionen:** `python folder_qt.py` (kräver `pip install
+  PySide6` — nytt beroende i requirements.txt). Tkinter-versionen
+  (`folder.py`) finns kvar som fallback utan beroenden.
+* Tester: 20 nya (autostart med fake-registret, no-console, statisk
+  Qt- struktur-audit) — **105 st totalt**
+
 ### v1.4.1 — P0-buggfix: appen startade inte på Windows
 
 * **Kraschfix (ttk-options)**: `ttk.Combobox` fick felaktigt `command=`
