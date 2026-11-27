@@ -476,20 +476,24 @@ class LabelGUI:
             anchor="w", pady=(0, 5))
 
         # Förslag #10: periodläge; förslag #11: språk.
+        # OBS: ttk.Combobox stödjer inte 'command=' (tk-option) —
+        # händelsen binds via <<ComboboxSelected>> (P0-buggfix v1.4.1).
         period_frame = ttk.Frame(left)
         period_frame.pack(fill="x", pady=2)
         ttk.Label(period_frame, text="Period:").pack(side="left")
-        ttk.Combobox(
+        period_combo = ttk.Combobox(
             period_frame, textvariable=self.verifikat_period_var, width=10,
             values=("manad", "kvartal", "halvar"), state="readonly",
-            command=self._update_verifikat_info,
-        ).pack(side="left", padx=(5, 10))
+        )
+        period_combo.pack(side="left", padx=(5, 10))
+        period_combo.bind("<<ComboboxSelected>>", self._update_verifikat_info)
         ttk.Label(period_frame, text="Språk:").pack(side="left")
-        ttk.Combobox(
+        language_combo = ttk.Combobox(
             period_frame, textvariable=self.verifikat_language_var, width=6,
             values=("se", "en", "no"), state="readonly",
-            command=self._update_verifikat_info,
-        ).pack(side="left", padx=(5, 0))
+        )
+        language_combo.pack(side="left", padx=(5, 0))
+        language_combo.bind("<<ComboboxSelected>>", self._update_verifikat_info)
 
         year_frame = ttk.Frame(left)
         year_frame.pack(fill="x", pady=2)
@@ -761,8 +765,7 @@ LOGGOTYPMAPP:
                 else True
             )
             ttk.Checkbutton(
-                frame, variable=include_var, width=2,
-                command=lambda: None,
+                frame, variable=include_var,
             ).pack(side="left")
             ttk.Label(frame, text=f"Etikett {index + 1}:", width=10).pack(side="left")
             text_widget = tk.Text(frame, height=2, width=40)

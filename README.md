@@ -6,6 +6,21 @@ verifikatetiketter för ett helt år.
 
 ## Nya förbättringar
 
+### v1.4.1 — P0-buggfix: appen startade inte på Windows
+
+* **Kraschfix (ttk-options)**: `ttk.Combobox` fick felaktigt `command=`
+  (ttk har ingen sådan option — kraschade med `unknown option "-command"`
+  vid start på Windows/Python 3.15). Period- och språk-väljarna binder nu
+  `<<ComboboxSelected>>` i stället.
+* **Dold krasch fixad i samma svep**: `ttk.Checkbutton(width=2)` (bredd är
+  inte en ttk.Checkbutton-option) — borttagen.
+* **Statisk vaktest** (`tests/test_gui_statik.py`): AST-skanning av
+  folder.py som förbjuder ogiltiga ttk-options för alltid (körs även utan
+  tkinter/display).
+* **Bootstrap-uppdatering**: `python Script/updater.py` kör updateraren
+  **utan GUI** — används om appen inte kan starta (exakt detta läge):
+  den jämför filer mot Latest-releasen och lagar installationen.
+
 ### v1.4.0 — auto-uppdatering 00:00 varje dag (REQ-K4)
 
 * **Auto-uppdatering varje midnatt**: appen kör REQ-K4-uppdateringen

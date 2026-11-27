@@ -5,9 +5,25 @@
 <!--
 ═══════════════════════════════════════════════════════════════════════════════
   © Copyright Rickard Längkvist {get_copyright_year()} - All rights reserved
-  Specifikation v6.5 — Sammanslagen & uppdaterad
+  Specifikation v6.6 — Sammanslagen & uppdaterad
   Senast uppdaterad: 2026-11-25
   Status: AKTIV UTVECKLING
+<!--
+  v6.6 — ÄNDRINGAR (2026-11-25, v1.4.1 — P0-startkrasch på Windows)
+  ───────────────────────────────────────────────────────────────
+  · RAPPORTERAD KRASCH (Windows, Python 3.15): _tkinter.TclError:
+    unknown option "-command" vid ttk.Combobox (period/språk) — ttk har
+    ingen command-option. Fix: .bind("<<ComboboxSelected>>", …).
+  · Dold krasch fixad: ttk.Checkbutton(width=2) i checkrute-rader
+    (width är inte en ttk.Checkbutton-option).
+  · Statisk vaktest: tests/test_gui_statik.py — AST-skanning förbjuder
+    ogiltiga ttk-options (Combobox command, Checkbutton width, Notebook/
+    Progressbar/Entry command). OBS: ttk.Scrollbar/Scale HAR command.
+  · updater.py: __main__-bootstrap — "python Script/updater.py" kör
+    updateraren utan GUI ( för installationer som inte kan starta).
+  · Tester: 3 nya vakttester — 85 totalt.
+-->
+
 <!--
   v6.5 — ÄNDRINGAR (2026-11-25, v1.4.0 — auto-uppdatering 00:00)
   ───────────────────────────────────────────────────────────────

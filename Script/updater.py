@@ -12,12 +12,17 @@
 # Driftnotis (§2): asset-uppladdning är blockad i sandlådan →
 # jämförelsekällan är releasens auto-genererade källarkiv via
 # codeload.github.com. Inga externa beroenden (urllib + tarfile).
+#
+# BOOTSTRAP: modulen importerar INTE tkinter och kan köras fristående —
+#   python Script/updater.py
+# (används om själva appen inte kan starta, t.ex. vid GUI-bugg.)
 
 from __future__ import annotations
 
 import hashlib
 import json
 import shutil
+import sys
 import tarfile
 import tempfile
 import threading
@@ -498,3 +503,9 @@ __all__ = [
     "apply_update", "check_for_new_release", "run_update",
     "next_midnight_delay", "auto_update", "CATCHUP_WINDOW_MIN",
 ]
+
+
+if __name__ == "__main__":  # BOOTSTRAP: kör uppdateraren utan GUI
+    _result = run_update()
+    print(json.dumps(_result, ensure_ascii=False, indent=2))
+    sys.exit(0 if _result.get("ok") else 1)
