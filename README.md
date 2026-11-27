@@ -6,6 +6,20 @@ PDF-etiketter för pärmar och arkivering: ryggetiketter (41×64 mm /
 
 ## Nya förbättringar
 
+### v1.7.2 — P0-buggfix: NameError QAction vid menybygget (v1.7.0-regression)
+
+* **Kraschfix**: menyerna kallade `QAction`/`QMenu`/`QDesktopServices`/
+  `QUrl` — men import-raderna kom aldrig in i folder.py (v1.7.0-
+  regression; redigeringen rapporterade framgång men applicerades inte).
+  Nu importerade korrekt från `PySide6.QtGui` respektive `PySide6.QtWidgets`.
+* **Ny vaktklass som hade fångat detta i sandbox**: AST-audit kontrollerar
+  att VARJE Qt-namn som används också importeras (körs alltid, kräver
+  inget grafikbibliotek) + pyflakes-vakt mot alla undefined names (när
+  pyflakes finns). pyflakes kördes även manuellt — noll undefined names.
+* Kosmetisk fix: onödig `Dict[str, List[str]]`-annotation i test_updater.
+* Tester: 3 nya — 122 st totalt.
+* Uppdatera en installation som inte startar: `python Script/updater.py`
+
 ### v1.7.1 — P0-buggfix: autostart kraschade appstarten på Windows
 
 * **Kraschfix (winreg-API)**: autostart kallade `key.QueryValueEx(...)` —

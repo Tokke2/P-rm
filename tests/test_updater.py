@@ -116,7 +116,7 @@ class ApplyUpdateTests(unittest.TestCase):
         if updater.BACKUP_DIR.exists():
             shutil.rmtree(updater.BACKUP_DIR)
 
-    def _setup_mixed_diff(self) -> Dict[str, List[str]]:
+    def _setup_mixed_diff(self):
         _write(self.current, "folder.py", "GAMMALT")
         _write(self.current, "gammal_modul.py", "raderas")
         _write(self.current, "oforandrad.py", "samma")

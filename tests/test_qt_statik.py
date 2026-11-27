@@ -193,5 +193,65 @@ class MenyOchStodTests(unittest.TestCase):
         self.assertIn("Stöd Pärmetikett Generator", readme)
 
 
+class QtImportTackningTests(unittest.TestCase):
+    """P0-regression v1.7.2: alla Qt-namn som ANVÄNDS måste importeras.
+
+    v1.7.0-krisen: en import-redigering rapporterade 'success' men QAction/
+    QMenu/QDesktopServices/QUrl kom aldrig in i folder.py — py_compile
+    hittar inte NameError och smoke-testet skippar i sandbox (libGL).
+    Denna AST-audit körs ALLTID och fångar undefined Qt-namn statiskt.
+    """
+
+    def _imported_qt_names(self) -> set:
+        imported = set()
+        for node in ast.walk(TREE):
+            if (isinstance(node, ast.ImportFrom) and node.module
+                    and node.module.startswith("PySide6")):
+                for alias in node.names:
+                    imported.add(alias.asname or alias.name)
+        return imported
+
+    def test_every_qt_name_used_is_imported(self) -> None:
+        imported = self._imported_qt_names()
+        used = {
+            node.id for node in ast.walk(TREE)
+            if isinstance(node, ast.Name) and node.id.startswith("Q")
+        }
+        missing = sorted(used - imported)
+        self.assertEqual(
+            missing, [],
+            "Qt-namn använda men ej importerade (NameError i kö): "
+            + ", ".join(missing),
+        )
+
+    def test_meny_namn_importerades(self) -> None:
+        """De fyra namn som v1.7.0-menyerna behöver — explicit vakt."""
+        imported = self._imported_qt_names()
+        for name in ("QAction", "QMenu", "QDesktopServices", "QUrl"):
+            self.assertIn(name, imported)
+
+    def test_pyflakes_undefined_names(self) -> None:
+        """Om pyflakes finns: noll undefined names i folder.py (hela
+        namntäckningen, inte bara Qt). Skippar annars."""
+        try:
+            from pyflakes.api import check
+            from pyflakes.reporter import Reporter
+        except ImportError:
+            self.skipTest("pyflakes saknas i miljön")
+        import io
+        out = io.StringIO()
+        check(QT_SOURCE, "folder.py", Reporter(out, out))
+        # Endast undefined names är kraschklassen; 'imported but unused'
+        # är ofarliga (t.ex. BarcodeModule som dokumentation).
+        problems = [
+            line for line in out.getvalue().splitlines()
+            if "undefined name" in line
+        ]
+        self.assertEqual(
+            problems, [],
+            "pyflakes hittade undefined names (NameError i kö)",
+        )
+
+
 if __name__ == "__main__":
     unittest.main()

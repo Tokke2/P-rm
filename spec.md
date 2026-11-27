@@ -5,24 +5,28 @@
 <!--
 ═══════════════════════════════════════════════════════════════════════════════
   © Copyright Rickard Längkvist {get_copyright_year()} - All rights reserved
-  Specifikation v7.0 — Sammanslagen & uppdaterad
+  Specifikation v7.1 — Sammanslagen & uppdaterad
   Senast uppdaterad: 2026-11-25
   Status: AKTIV UTVECKLING
 <!--
-  v7.0 — ÄNDRINGAR (2026-11-25, v1.7.1 — P0: autostart-krasch på Windows)
+  v7.1 — ÄNDRINGAR (2026-11-25, v1.7.2 — P0: NameError QAction i menyer)
   ───────────────────────────────────────────────────────────────
-  · RAPPORTERAD KRASCH: AttributeError: 'winreg.PyHKEY' object has no
-    attribute 'QueryValueEx' — autostart kallade key.QueryValueEx/
-    key.SetValueEx/key.DeleteValue. PyHKEY-objektet har bara Close/
-    Detach; värdefunktionerna finns på MODULE-nivå med nyckeln först.
-  · Fix: alla fyra anropen → winreg.SetValueEx(key, …) /
-    winreg.DeleteValue(key, …) / winreg.QueryValueEx(key, …).
-  · Försvarslag: enable/disable fångar Exception (inte bara OSError);
-    is_/get_ fångar Exception → no-op — registret kan aldrig krascha
-    appstarten.
-  · tests/test_autostart.py: permanent regressionssvit — riktig winreg-
-    API-simulering (PyHKEY utan värdefunktioner) + udda API → no-op.
-  · Tester: 3 nya — 119 totalt.
+  · RAPPORTERAD KRASCH: NameError: name 'QAction' is not defined
+    (folder.py _build_menus). Orsak: v1.7.0-importredigeringen
+    rapporterade framgång men applicerades aldrig — QAction, QMenu,
+    QDesktopServices, QUrl saknades i import-blocket.
+  · Fix: import-blocket nu med QtGui(QAction, QDesktopServices, QFont,
+    QIcon, QUrl) + QtWidgets(QMenu …).
+  · NY VAKTKLASS QtImportTackningTests (AST, alltid körbar i sandbox):
+    (1) varje Qt*-namn som används måste importeras; (2) explicit vakt
+    för QAction/QMenu/QDesktopServices/QUrl; (3) pyflakes-vakt mot alla
+    undefined names när pyflakes finns (skip annars).
+  · pyflakes kördes över hela koden: endast ofarliga unused-imports;
+    test_updater-annotation fixad (Dict/List utan import).
+  · Lärdom (P0-mönster #3): phantom-success-redigeringar — verifiera
+    ALLTID med grep/pyflakes efter edit_file; py_compile hittar inte
+    NameError; statiska vakter måste täcka runtime-felklasser.
+  · Tester: 122 totalt.
 -->
 
 <!--

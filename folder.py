@@ -37,11 +37,13 @@ SkarmModule.ensure_no_console_streams()
 
 try:
     from PySide6.QtCore import QTimer, Qt
-    from PySide6.QtGui import QFont, QIcon
+    from PySide6.QtGui import (
+        QAction, QDesktopServices, QFont, QIcon, QUrl,
+    )
     from PySide6.QtWidgets import (
         QApplication, QCheckBox, QComboBox, QFileDialog, QFrame,
         QGridLayout, QGroupBox, QHBoxLayout, QHeaderView, QLabel,
-        QMainWindow, QMessageBox, QPlainTextEdit, QPushButton,
+        QMainWindow, QMenu, QMessageBox, QPlainTextEdit, QPushButton,
         QRadioButton, QScrollArea, QSpinBox, QStatusBar, QTableWidget,
         QTableWidgetItem, QTabWidget, QVBoxLayout, QWidget,
     )
