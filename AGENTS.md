@@ -15,15 +15,20 @@ appens teknik (se §12).
 ## 1. Branch-reglerna (HÅRD)
 
 * Repot ska alltid ha **exakt EN arbetsbranch**: den aktuella
-  arena-branchen. Alla gamla session-brancher tas bort (det är gjort —
-  `arena/813a1786-p-rm` raderad 2026-11-25).
+  arena-branchen — och den är samtidigt **standardbranch** som består
+  **även efter byte av chatt**. En ny chatt fortsätter alltid på samma
+  arbetsbranch; skapa aldrig en ny om en aktiv finns. Alla gamla
+  session-brancher tas bort (det är gjort — `arena/813a1786-p-rm`
+  raderad 2026-11-25).
 * `main` står kvar som GitHub:s default-branch endast för att sandboxens
   token saknar admin-rättighet att byta/radera den. `main` är **förbjudet
   område**: aldrig committa, pusha eller merga emot den, och den ska
   aldrig återskapas eller uppdateras — **speciellt inte vid
   appuppdateringar**.
-* **Aldrig merge** — inte `git merge`, inte `gh pr merge`, inga mergar i
-  någon form. Ändringar committas alltid direkt på arbetsbranchen.
+* **Aldrig merge eller PR** — inte `git merge`, inte `gh pr merge`, inte
+  `gh pr create`; inga mergar och inga pull requests i någon form.
+  Ändringar committas alltid direkt på arbetsbranchen. Befintliga PR:er
+  **stängs** (aldrig mergas) — PR #1 stängdes 2026-11-25 pga denna regel.
 * Om gamla brancher dyker upp igen: ta bort dem så att endast **en** branch
   är kvar.
 
@@ -124,8 +129,9 @@ appens teknik (se §12).
 * **Prestanda**: bättre minneshantering, snabbare, energisnålare.
 * **Inställningar**: egen underflik för att skapa profiler **endast i
   appar som använder profiler** (Pärmetikett Generator har profilhantering
-  i `Script/label.py` → subflik aktuell här); ruttvalet från ttk-versionens
-  projektskapare ska finnas där ruttval är relevant.
+  i `Script/label.py` → subflik aktuell här); ruttvalet/"valet av ruta"
+  från ttk-versionens projektskapare ska återinföras **enbart i appar
+  som faktiskt hade det** i sin ttk-version.
 * **Updater**: säkrare och bättre (se §3).
 
 ## 12. Anpassning per app
