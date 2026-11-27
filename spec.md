@@ -5,8 +5,8 @@
 <!--
 ═══════════════════════════════════════════════════════════════════════════════
   © Copyright Rickard Längkvist {get_copyright_year()} - All rights reserved
-  Specifikation v6.0 — Sammanslagen & uppdaterad
-  Senast uppdaterad: 2026-06-02
+  Specifikation v6.2 — Sammanslagen & uppdaterad
+  Senast uppdaterad: 2026-11-24
   Status: AKTIV UTVECKLING
   Python: 3.12+
   UI-ramverk: Tkinter + ttkthemes (BEHÅLLS — se sektion 13)
@@ -26,6 +26,42 @@
 ═══════════════════════════════════════════════════════════════════════════════
 -->
 
+<!--
+  v6.1 — ÄNDRINGAR I DENNA OMHÄVNING (2026-11-24)
+  ───────────────────────────────────────────────────────────────────────
+  · PDF tillagd som logotypformat (första sidan används). Konvertering:
+      PDF  : PyMuPDF → Ghostscript → Inkscape → pdftoppm
+      SVG  : Inkscape → cairosvg → PyMuPDF
+      EPS  : Ghostscript → Inkscape
+  · Script/logotyp.py är nu single source of truth för logotypinläsning;
+    de gamla funktionerna i label.py är tunna wrappers.
+  · Nya filer: Script/verifikat.py (ren verifikatlogik) och
+    Script/settings_store.py (settings.json). Krav: requirements.txt.
+  · Knappen "Skapa BÅDA (1 & 2 per månad)" skapar verifikat för hela året
+    i två PDF:er: verifikat_<år>_1_per_manad.pdf (12 lappar) och
+    verifikat_<år>_2_per_manad.pdf (24 lappar). Filnamnen innehåller nu
+    antalet lappar per månad. Det går fortfarande att välja 3–12/månad.
+  · Rättat: typsnittsfallback, radbrytning av långa ord, sidbrytning i
+    rutnät, tomma etikettlistor och toppmargin för logotyp på A4-sida.
+  · Tester: tests/test_etiketter.py (python -m unittest discover -s tests).
+-->
+
+<!--
+  v6.2 — UI, DPI OCH SÄKRARE LAGRING (2026-11-24)
+  · Generatorns etiketttextfält skalar med fönstrets bredd. Fönsterhöjden
+    anpassas till skärmen, sparad bredd klampas inom arbetsytan och Tk:s
+    skalning följer skärmens DPI.
+  · Verifikat flyttat till egen flik för att minska vertikal scroll i
+    Generatorn. Hjälpfliken registreras en gång.
+  · Pärmikon ritad som vektorgrafik i appen; redigerbar brandmark finns i
+    assets/brandmark.svg.
+  · Vektorlogotyper renderas upp till 450 DPI; raster skalas inte upp artificiellt.
+    Stora raster- och vektorjobb begränsas. PDF-typografi och klipplinjer är vektor.
+  · settings.json skrivs atomiskt; skärmlayout finns i Script/ui_layout.py.
+  · AGENTS.md innehåller arbetsbranch-, release-, test- och chattregler.
+-->
+
+
 
 <!--
 ───────────────────────────────────────────────────────────────────────────────
@@ -41,7 +77,8 @@
         • Tjock: 57 × 64 mm
     - Skapa INDEX-etiketter (12 rader på A4 med numrering)
     - Skapa VERIFIKAT-etiketter för ett valt år:
-        • Standard 2 lappar per månad (justerbart 1–12)
+        • Knapp för BÅDA varianterna: 1 och 2 lappar per månad
+        • Övriga antal 1–12 lappar per månad går också att välja
         • Layout per lapp (fet text, en rad var):
               VERIFIKAT
               MÅN        (t.ex. JAN)
@@ -49,7 +86,7 @@
               ÅR         (t.ex. 2026)
         • Ordning: JAN 1, JAN 2, FEB 1, FEB 2, ... DEC
     - DYNAMISK logotyphantering:
-        • Stöd för SVG, EPS, AI, PNG, JPG, BMP, GIF, TIFF
+        • Stöd för PDF, SVG, EPS, AI, PNG, JPG, BMP, GIF, TIFF
         • SVG konverteras via Inkscape
         • EPS/AI konverteras via Ghostscript (fallback Inkscape)
         • Logotyp skalas automatiskt oavsett originalstorlek
@@ -887,11 +924,11 @@
   7. KÄNDA FEL / BUGGAR + ÅTGÄRDSPLAN — CHECKLISTA
 ───────────────────────────────────────────────────────────────────────────────
 
-  [ ] BUGG: Script/__init__.py saknas.
+  [x] BUGG: Script/__init__.py saknas (åtgärdad).
       Allvar: MEDIUM
       Åtgärd: Skapa tom Script/__init__.py.
 
-  [ ] BUGG: Kodduplicering label.py ↔ logotyp.py.
+  [x] BUGG: Kodduplicering label.py ↔ logotyp.py (åtgärdad).
       Allvar: MEDIUM
       Symptom: find_inkscape, convert_*, select_logo_file,
                load_and_resize_logo, compute_centered_logo_position,
@@ -912,7 +949,7 @@
       Allvar: MEDIUM
       Åtgärd: Tomhetskontroll (create_pdf validerar mestadels — verifiera).
 
-  [ ] BUGG: Arial-Bold registreras men draw-funktioner använder
+  [x] BUGG: Arial-Bold registreras men draw-funktioner använder
             "Helvetica-Bold".
       Allvar: LÅG
       Åtgärd: Kontrollera registrering; använd rätt font.
@@ -941,7 +978,7 @@
       Allvar: MEDIUM
       Åtgärd: Implementera Script/ui_helpers.py på order.
 
-  [ ] SAKNAS: Alla settings i settings.json.
+  [x] SAKNAS: Alla settings i settings.json (delvis implementerat).
       Allvar: MEDIUM
       Åtgärd: Implementera Script/settings_store.py på order.
 
@@ -987,10 +1024,10 @@
 ───────────────────────────────────────────────────────────────────────────────
 
   OMEDELBART (Fas 1 — stabilisering):
-    [ ] Skapa tom Script/__init__.py.
-    [ ] Eliminera kodduplicering (logotyp.py som källa).
-    [ ] Fixa font-fallback (Arial-Bold -> Helvetica-Bold).
-    [ ] Tomhetskontroll i draw_spine_labels.
+    [x] Skapa tom Script/__init__.py.
+    [x] Eliminera kodduplicering (logotyp.py som källa).
+    [x] Fixa font-fallback (Arial-Bold -> Helvetica-Bold).
+    [x] Tomhetskontroll i draw_spine_labels.
 
   UI / TEMA:
     [ ] Skapa Script/theme_manager.py.

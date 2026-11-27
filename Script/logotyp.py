@@ -1,43 +1,60 @@
-# Fil: logotyp.py — Logotyphantering med SVG/EPS-stöd
+# Fil: Script/logotyp.py — Logotyphantering (PDF / SVG / EPS / AI / raster)
 # Plats: Script/logotyp.py
 # © Copyright Rickard Längkvist {get_copyright_year()} - All rights reserved
-# Kopplas till: folder.py och Script/label.py
-# Stöd för: SVG, EPS, PNG, JPG och andra bildformat
+#
+# Denna modul är "single source of truth" för inläsning av logotyper.
+# label.py och folder.py delegerar hit, så konverteringslogiken finns bara
+# på ett ställe.
+#
+# Konverteringar använder, i prioritetsordning:
+#   PDF  : PyMuPDF → Ghostscript → Inkscape → pdftoppm (poppler)
+#   SVG  : Inkscape → cairosvg → PyMuPDF
+#   EPS  : Ghostscript → Inkscape
+#   AI   : samma som EPS
+#   Övrigt: Pillow (PNG, JPG, BMP, GIF, TIFF, WEBP …)
+#
+# Inga tkinter-fönster öppnas här: GUI:t visar istället ett meddelande om
+# load_and_resize_logo() returnerar None.
 
 from __future__ import annotations
 
 import os
 import shutil
-import tempfile
 import subprocess
+import tempfile
 import traceback
 from datetime import datetime
-from typing import Optional, Tuple, List
 from pathlib import Path
+from typing import Any, List, Optional, Tuple
+
 from PIL import Image
-from tkinter import filedialog, messagebox
 
 # === KONSTANTER ===
-LOGO_MAX_WIDTH_MM = 50          # mm (utan enhet för flexibilitet)
-DPI               = 300
-MM_TO_PIXELS      = DPI / 25.4
-SVG_EXPORT_DPI_FACTOR = 1.5
+LOGO_MAX_WIDTH_MM = 50          # mm
+DPI = 450
+MM_TO_PIXELS = DPI / 25.4
+SVG_EXPORT_DPI_FACTOR = 1.5     # lite överupplösning → skarpare utskrift
+MAX_RENDER_PIXELS = 16_000_000
+MAX_RENDER_DIMENSION = 8192
+MAX_RASTER_SOURCE_PIXELS = 40_000_000
+LOGO_MIN_TOP_MARGIN_PX = 5
 
-# Centrering / placering av logotyp
-LOGO_MIN_TOP_MARGIN_PX = 5     # Minsta avstånd från toppen (i pixlar)
+RASTER_FORMATS = {
+    ".png", ".jpg", ".jpeg", ".bmp", ".gif", ".tiff", ".tif", ".webp",
+}
+VECTOR_FORMATS = {".pdf", ".svg", ".eps", ".ai"}
+ALL_FORMATS = RASTER_FORMATS | VECTOR_FORMATS
 
-# Stödda format
-RASTER_FORMATS = {'.png', '.jpg', '.jpeg', '.bmp', '.gif', '.tiff', '.tif'}
-VECTOR_FORMATS = {'.svg', '.eps', '.ai'}
-ALL_FORMATS    = RASTER_FORMATS | VECTOR_FORMATS
+PDF_FORMATS = {".pdf"}
+SVG_FORMATS = {".svg"}
+EPS_FORMATS = {".eps", ".ai"}
 
-# Standardmappar (relativt till Script-mappen)
-DEFAULT_LOGO_FOLDER   = Path(__file__).parent.parent / "Logotyp"
+DEFAULT_LOGO_FOLDER = Path(__file__).parent.parent / "Logotyp"
 DEFAULT_EXPORT_FOLDER = Path(__file__).parent.parent / "export"
 
 
 # ──────────────────────────────────────────────────────────
-# COPYRIGHT
+# COPYRIGHT / EXPORTMAPP
 # ──────────────────────────────────────────────────────────
 
 def get_copyright_year() -> int:
@@ -53,316 +70,473 @@ def get_copyright_notice() -> str:
     )
 
 
-# ──────────────────────────────────────────────────────────
-# EXPORTMAPP
-# ──────────────────────────────────────────────────────────
-
 def get_export_folder() -> Path:
-    """
-    Returnerar sökväg till export/-mappen (applikationsrotens undermapp).
-
-    Skapar mappen om den inte finns.
-
-    Returns:
-        Path till <approt>/export/
-    """
+    """Returnerar (och skapar vid behov) export-mappen i approten."""
     folder = DEFAULT_EXPORT_FOLDER
     folder.mkdir(parents=True, exist_ok=True)
     return folder
 
 
 def get_export_path(filename: str) -> Path:
-    """
-    Returnerar full sökväg för en fil i export/-mappen.
-
-    Args:
-        filename: Filnamn (t.ex. "verifikat_2026.pdf")
-
-    Returns:
-        Path till <approt>/export/<filename>
-    """
+    """Returnerar <approt>/export/<filename>."""
     return get_export_folder() / filename
 
 
 # ──────────────────────────────────────────────────────────
-# HITTA INKSCAPE
+# HITTA EXTERNA VERKTYG / VALFRIA BIBLIOTEK
 # ──────────────────────────────────────────────────────────
 
-def find_inkscape() -> Optional[str]:
-    """
-    Letar efter Inkscape i PATH och vanliga installationsplatser.
+def _first_existing(candidates: List[Optional[str]]) -> Optional[str]:
+    return next((p for p in candidates if p and os.path.isfile(p)), None)
 
-    Returns:
-        Sökväg till Inkscape-binären eller None.
-    """
-    locations = [
+
+def find_inkscape() -> Optional[str]:
+    """Letar efter Inkscape i PATH och vanliga installationsplatser."""
+    return _first_existing([
         shutil.which("inkscape"),
-        # Windows
         r"C:\Program Files\Inkscape\bin\inkscape.exe",
         r"C:\Program Files\Inkscape\inkscape.exe",
         r"C:\Program Files (x86)\Inkscape\bin\inkscape.exe",
-        r"C:\Program Files (x86)\Inkscape\inkscape.exe",
-        # Linux
         "/usr/bin/inkscape",
         "/usr/local/bin/inkscape",
         "/snap/bin/inkscape",
-        # macOS
         "/opt/homebrew/bin/inkscape",
         "/Applications/Inkscape.app/Contents/MacOS/inkscape",
-        "/Applications/Inkscape.app/Contents/Resources/bin/inkscape",
-    ]
+    ])
 
-    result = next((p for p in locations if p and os.path.isfile(p)), None)
-    if result:
-        print(f"[Inkscape] ✓ Hittad: {result}")
-    return result
-
-
-# ──────────────────────────────────────────────────────────
-# HITTA GHOSTSCRIPT
-# ──────────────────────────────────────────────────────────
 
 def find_ghostscript() -> Optional[str]:
-    """
-    Letar efter Ghostscript i PATH och vanliga installationsplatser.
-
-    Returns:
-        Sökväg till Ghostscript-binären eller None.
-    """
-    locations = [
+    """Letar efter Ghostscript (gs / gswin64c / gswin32c)."""
+    candidates = [
         shutil.which("gs"),
         shutil.which("gswin64c"),
         shutil.which("gswin32c"),
     ]
-
-    # Sök dynamiskt i Program Files\gs (Windows)
-    for base in [r"C:\Program Files\gs", r"C:\Program Files (x86)\gs"]:
+    for base in (r"C:\Program Files\gs", r"C:\Program Files (x86)\gs"):
         if os.path.isdir(base):
             try:
                 for folder in os.listdir(base):
-                    for exe in ["gswin64c.exe", "gswin32c.exe", "gs.exe"]:
-                        path = os.path.join(base, folder, "bin", exe)
-                        if os.path.isfile(path):
-                            locations.append(path)
-            except Exception:
+                    for exe in ("gswin64c.exe", "gswin32c.exe", "gs.exe"):
+                        candidates.append(
+                            os.path.join(base, folder, "bin", exe)
+                        )
+            except OSError:
                 pass
+    candidates += ["/usr/bin/gs", "/usr/local/bin/gs", "/opt/homebrew/bin/gs"]
+    return _first_existing(candidates)
 
-    # Linux / macOS
-    locations.extend([
-        "/usr/bin/gs",
-        "/usr/local/bin/gs",
-        "/opt/homebrew/bin/gs",
+
+def find_pdftoppm() -> Optional[str]:
+    """Letar efter pdftoppm från poppler (extra fallback för PDF)."""
+    return _first_existing([
+        shutil.which("pdftoppm"),
+        shutil.which("pdftoppm.exe"),
+        "/usr/bin/pdftoppm",
+        "/opt/homebrew/bin/pdftoppm",
     ])
 
-    result = next((p for p in locations if p and os.path.isfile(p)), None)
-    if result:
-        print(f"[Ghostscript] ✓ Hittad: {result}")
-    return result
+
+def _pymupdf_module() -> Any:
+    """Returnerar PyMuPDF om det är installerat, annars None."""
+    try:
+        import pymupdf as mod  # PyMuPDF >= 1.24
+        return mod
+    except ImportError:
+        pass
+    try:
+        import fitz as mod  # äldre namn
+        return mod
+    except ImportError:
+        return None
+
+
+def _cairosvg_module() -> Any:
+    """Returnerar cairosvg om det går att importera, annars None."""
+    try:
+        import cairosvg
+        return cairosvg
+    except Exception:  # cairosvg behöver libcairo som kan saknas
+        return None
+
+
+def check_tools() -> dict:
+    """Returnerar en översikt över tillgängliga konverteringsverktyg."""
+    return {
+        "inkscape": bool(find_inkscape()),
+        "ghostscript": bool(find_ghostscript()),
+        "pdftoppm": bool(find_pdftoppm()),
+        "pymupdf": bool(_pymupdf_module()),
+        "cairosvg": bool(_cairosvg_module()),
+    }
 
 
 # ──────────────────────────────────────────────────────────
-# KONVERTERA SVG → PNG
+# HJÄLPFUNKTIONER FÖR KONVERTERING
 # ──────────────────────────────────────────────────────────
+
+def _new_temp_png() -> str:
+    handle = tempfile.NamedTemporaryFile(delete=False, suffix=".png")
+    handle.close()
+    return handle.name
+
+
+def _remove(path: Optional[str]) -> None:
+    if path and os.path.exists(path):
+        try:
+            os.remove(path)
+        except OSError:
+            pass
+
+
+def _run(command: List[str], timeout: int = 120) -> bool:
+    """Kör ett externt kommando och returnerar True vid noll exitkod."""
+    try:
+        result = subprocess.run(
+            command, capture_output=True, text=True, timeout=timeout
+        )
+        if result.returncode != 0:
+            detail = (result.stderr or result.stdout or "").strip()[:400]
+            print(f"[Konvertering] Kommando misslyckades: {detail}")
+        return result.returncode == 0
+    except (OSError, subprocess.SubprocessError) as exc:
+        print(f"[Konvertering] Kunde inte köra {command[0]}: {exc}")
+        return False
+
+
+def _trim_whitespace(img: Image.Image) -> Image.Image:
+    """Tar bort tomma marginaler runt en konverterad vektorlogotyp.
+
+    Transparens används när den finns, annars vit bakgrund. En liten
+    marginal (2 px) lämnas kvar så att tunna linjer inte klipps bort.
+    """
+    if img.width < 4 or img.height < 4:
+        return img
+
+    rgba = img.convert("RGBA")
+    alpha = rgba.getchannel("A")
+    if alpha.getextrema()[0] < 250:
+        # Genomskinlig (eller delvis genomskinlig) bakgrund.
+        mask = alpha.point(lambda value: 255 if value > 8 else 0)
+    else:
+        # Opaque vit bakgrund: allt som inte är nära vitt är innehåll.
+        mask = rgba.convert("L").point(lambda value: 255 if value < 250 else 0)
+
+    bbox = mask.getbbox()
+    if not bbox:
+        return img
+
+    pad = 2
+    left = max(0, bbox[0] - pad)
+    top = max(0, bbox[1] - pad)
+    right = min(img.width, bbox[2] + pad)
+    bottom = min(img.height, bbox[3] + pad)
+
+    # Kräpp inte bort en stor del av motivet pga. enstaka pixlar.
+    if right - left < img.width * 0.2 or bottom - top < img.height * 0.05:
+        return img
+    return img.crop((left, top, right, bottom))
+
+
+def _resize_to_width(img: Image.Image, target_px: int) -> Image.Image:
+    """Skalar ned med Lanczos, behåller detalj och begränsar minnet.
+
+    Rasterbilder skalas aldrig upp: interpolering kan inte skapa verklig
+    skärpa. Vektorer renderas redan i målstorlek av respektive konverterare.
+    """
+    if target_px <= 0 or img.width <= 0 or img.height <= 0:
+        return img
+    ratio = min(1.0, target_px / float(img.width))
+    size = (max(1, int(round(img.width * ratio))),
+            max(1, int(round(img.height * ratio))))
+    pixel_ratio = min(
+        1.0,
+        MAX_RENDER_DIMENSION / max(size),
+        (MAX_RENDER_PIXELS / (size[0] * size[1])) ** 0.5,
+    )
+    if pixel_ratio < 1.0:
+        size = (max(1, int(size[0] * pixel_ratio)),
+                max(1, int(size[1] * pixel_ratio)))
+    try:
+        resample = Image.Resampling.LANCZOS
+    except AttributeError:  # Pillow < 9.1
+        resample = Image.LANCZOS
+    if img.size == size:
+        return img
+    return img.resize(size, resample)
+
+
+def _load_converted_png(path: str, target_px: int) -> Optional[Image.Image]:
+    """Öppnar en konverterad PNG, beskär tomma marginaler och skalar."""
+    if not os.path.exists(path) or os.path.getsize(path) == 0:
+        return None
+    try:
+        with Image.open(path) as source:
+            img = source.convert("RGBA")
+            img.load()
+        img = _trim_whitespace(img)
+        img = _resize_to_width(img, target_px)
+        return img
+    except Exception as exc:
+        print(f"[Logo] Kunde inte läsa konverterad bild: {exc}")
+        return None
+
+
+def _render_with_pymupdf(
+    source: Path,
+    output_path: str,
+    width_px: int,
+    *,
+    svg: bool = False,
+) -> bool:
+    """Renderar första sidan i en PDF (eller en SVG) med PyMuPDF."""
+    mod = _pymupdf_module()
+    if mod is None:
+        return False
+    try:
+        if svg:
+            doc = mod.open(stream=source.read_bytes(), filetype="svg")
+            pdf_bytes = doc.convert_to_pdf()
+            doc = mod.open(stream=pdf_bytes, filetype="pdf")
+        else:
+            doc = mod.open(str(source))
+
+        if doc.page_count < 1:
+            return False
+        page = doc.load_page(0)
+        page_width = max(float(page.rect.width), 1.0)
+        page_height = max(float(page.rect.height), 1.0)
+        scale = min(
+            max(width_px / page_width, 0.05),
+            30.0,
+            MAX_RENDER_DIMENSION / max(page_width, page_height),
+            (MAX_RENDER_PIXELS / (page_width * page_height)) ** 0.5,
+        )
+        pixmap = page.get_pixmap(
+            matrix=mod.Matrix(scale, scale), alpha=True, annots=False
+        )
+        pixmap.save(output_path)
+        doc.close()
+        return os.path.getsize(output_path) > 0
+    except Exception as exc:
+        print(f"[PyMuPDF] Konvertering misslyckades: {exc}")
+        return False
+
+
+def _inkscape_export(
+    source: str,
+    output_path: str,
+    width_px: int,
+    *,
+    area_drawing: bool = False,
+) -> bool:
+    """Exporterar PNG med Inkscape (både 0.x och 1.x stöds)."""
+    inkscape = find_inkscape()
+    if not inkscape:
+        return False
+    try:
+        version = subprocess.run(
+            [inkscape, "--version"], capture_output=True, text=True, timeout=10
+        )
+        legacy = "0." in (version.stdout or "")
+    except Exception:
+        legacy = False
+
+    if legacy:
+        command = [
+            inkscape, "--export-png", output_path,
+            "--export-width", str(width_px),
+            "--export-background-opacity", "0", source,
+        ]
+    else:
+        command = [
+            inkscape, source,
+            f"--export-filename={output_path}",
+            f"--export-width={width_px}",
+            "--export-background-opacity=0",
+        ]
+        if area_drawing:
+            command.append("--export-area-drawing")
+
+    return _run(command) and os.path.exists(output_path) and os.path.getsize(output_path) > 0
+
+
+# ──────────────────────────────────────────────────────────
+# KONVERTERINGAR → PNG (temporära filer)
+# ──────────────────────────────────────────────────────────
+
+def convert_pdf_to_png(pdf_path: str, width_px: int) -> Optional[str]:
+    """Konverterar första PDF-sidan till en temporär PNG-fil.
+
+    Flera fallbackar: PyMuPDF, Ghostscript, Inkscape och pdftoppm.
+    Returnerar sökvägen till PNG-filen eller None.
+    """
+    source = Path(pdf_path)
+    if not source.is_file():
+        return None
+
+    # 1) PyMuPDF — snabbast och kräver inga externa program.
+    out = _new_temp_png()
+    if _render_with_pymupdf(source, out, width_px):
+        print(f"[PDF] ✓ Konverterad med PyMuPDF ({width_px} px)")
+        return out
+    _remove(out)
+
+    # 2) Ghostscript — renderar med transparent bakgrund.
+    gs = find_ghostscript()
+    if gs:
+        out = _new_temp_png()
+        command = [
+            gs, "-dSAFER", "-dBATCH", "-dNOPAUSE", "-dQUIET",
+            "-dFirstPage=1", "-dLastPage=1", "-dUseCropBox",
+            "-dTextAlphaBits=4", "-dGraphicsAlphaBits=4",
+            "-sDEVICE=pngalpha", "-r300",
+            f"-sOutputFile={out}", str(source),
+        ]
+        if _run(command) and os.path.exists(out) and os.path.getsize(out) > 0:
+            print("[PDF] ✓ Konverterad med Ghostscript")
+            return out
+        _remove(out)
+
+    # 3) Inkscape.
+    out = _new_temp_png()
+    if _inkscape_export(str(source), out, width_px, area_drawing=True):
+        print("[PDF] ✓ Konverterad med Inkscape")
+        return out
+    _remove(out)
+
+    # 4) pdftoppm (poppler). Skriver till <prefix>.png, ej till prefixet.
+    pdftoppm = find_pdftoppm()
+    if pdftoppm:
+        prefix = _new_temp_png()[:-4]
+        output_path = prefix + ".png"
+        command = [
+            pdftoppm, "-png", "-r", "300", "-f", "1", "-l", "1",
+            "-singlefile", str(source), prefix,
+        ]
+        if _run(command) and os.path.exists(output_path):
+            print("[PDF] ✓ Konverterad med pdftoppm")
+            return output_path
+        _remove(output_path)
+
+    print(
+        "[PDF] ✗ Kunde inte läsa PDF-logotypen. Installera PyMuPDF "
+        "(pip install pymupdf), Ghostscript, Inkscape eller poppler."
+    )
+    return None
+
 
 def convert_svg_to_png(svg_path: str, width_px: int) -> Optional[str]:
-    """
-    Konverterar SVG till PNG via Inkscape.
-
-    Args:
-        svg_path:  Sökväg till SVG-filen.
-        width_px:  Önskad bredd i pixlar.
-
-    Returns:
-        Sökväg till temporär PNG-fil eller None vid fel.
-    """
-    inkscape_path = find_inkscape()
-    if not inkscape_path:
-        print("[SVG] ✗ Inkscape hittades inte")
-        messagebox.showwarning(
-            "Inkscape saknas",
-            "Inkscape behövs för att öppna SVG-filer.\n\n"
-            "Ladda ner från: https://inkscape.org/release/"
-        )
+    """Konverterar SVG till en temporär PNG-fil med transparent bakgrund."""
+    source = Path(svg_path)
+    if not source.is_file():
         return None
 
-    try:
-        temp_out = tempfile.NamedTemporaryFile(delete=False, suffix=".png")
-        temp_out.close()
-        output_path = temp_out.name
+    # 1) Inkscape.
+    out = _new_temp_png()
+    if _inkscape_export(str(source), out, width_px):
+        print(f"[SVG] ✓ Konverterad med Inkscape ({width_px} px)")
+        return out
+    _remove(out)
 
-        # Kontrollera Inkscape-version
+    # 2) cairosvg.
+    cairosvg = _cairosvg_module()
+    if cairosvg:
+        out = _new_temp_png()
         try:
-            version_out = subprocess.run(
-                [inkscape_path, "--version"],
-                capture_output=True, text=True, timeout=10
+            cairosvg.svg2png(
+                url=str(source), write_to=out, output_width=width_px
             )
-            legacy  = "0." in version_out.stdout
-            version = "legacy (0.x)" if legacy else "modern (1.x+)"
-            print(f"[SVG] Inkscape version: {version}")
-        except Exception:
-            legacy = False
+            if os.path.exists(out) and os.path.getsize(out) > 0:
+                print(f"[SVG] ✓ Konverterad med cairosvg ({width_px} px)")
+                return out
+        except Exception as exc:
+            print(f"[SVG] cairosvg misslyckades: {exc}")
+        _remove(out)
 
-        if legacy:
-            cmd = [
-                inkscape_path,
-                "--export-png", output_path,
-                "--export-width", str(width_px),
-                "--export-background-opacity", "0",
-                svg_path,
-            ]
-        else:
-            cmd = [
-                inkscape_path,
-                svg_path,
-                f"--export-filename={output_path}",
-                f"--export-width={width_px}",
-                "--export-background-opacity=0",
-            ]
+    # 3) PyMuPDF kan läsa SVG via konvertering till PDF.
+    out = _new_temp_png()
+    if _render_with_pymupdf(source, out, width_px, svg=True):
+        print(f"[SVG] ✓ Konverterad med PyMuPDF ({width_px} px)")
+        return out
+    _remove(out)
 
-        print(f"[SVG] Konverterar: {os.path.basename(svg_path)}...")
-        result = subprocess.run(cmd, capture_output=True, timeout=120)
+    print(
+        "[SVG] ✗ Kunde inte läsa SVG-logotypen. Installera Inkscape, "
+        "cairosvg (pip install cairosvg) eller PyMuPDF."
+    )
+    return None
 
-        if os.path.exists(output_path) and os.path.getsize(output_path) > 0:
-            print(f"[SVG] ✓ Konverterad till PNG ({width_px} px)")
-            return output_path
-        else:
-            stderr = result.stderr.decode() if result.stderr else "Okänt fel"
-            print(f"[SVG] ✗ Konvertering misslyckades: {stderr}")
-            return None
-
-    except subprocess.TimeoutExpired:
-        print("[SVG] ✗ Timeout (>120 s)")
-        return None
-    except Exception as e:
-        print(f"[SVG] ✗ Undantag: {e}")
-        traceback.print_exc()
-        return None
-
-
-# ──────────────────────────────────────────────────────────
-# KONVERTERA EPS → PNG
-# ──────────────────────────────────────────────────────────
 
 def convert_eps_to_png(eps_path: str, width_px: int) -> Optional[str]:
-    """
-    Konverterar EPS till PNG via Ghostscript (primärt) eller Inkscape.
+    """Konverterar EPS/AI till en temporär PNG-fil."""
+    source = str(eps_path)
+    if not os.path.isfile(source):
+        return None
 
-    Args:
-        eps_path:  Sökväg till EPS-filen.
-        width_px:  Önskad bredd i pixlar.
+    # 1) Ghostscript med EPSCrop så att tomma sidmarginaler försvinner.
+    gs = find_ghostscript()
+    if gs:
+        out = _new_temp_png()
+        command = [
+            gs, "-dSAFER", "-dBATCH", "-dNOPAUSE", "-dQUIET", "-dEPSCrop",
+            "-dTextAlphaBits=4", "-dGraphicsAlphaBits=4",
+            "-sDEVICE=pngalpha", f"-r{max(150, width_px // 6)}",
+            f"-sOutputFile={out}", source,
+        ]
+        if _run(command) and os.path.exists(out) and os.path.getsize(out) > 0:
+            print("[EPS] ✓ Konverterad med Ghostscript")
+            return out
+        _remove(out)
 
-    Returns:
-        Sökväg till temporär PNG-fil eller None vid fel.
-    """
-    # ── Ghostscript (primärt) ──────────────────────────────
-    gs_path = find_ghostscript()
-    if gs_path:
-        try:
-            temp_out = tempfile.NamedTemporaryFile(delete=False, suffix=".png")
-            temp_out.close()
-            output_path = temp_out.name
+    # 2) Inkscape.
+    out = _new_temp_png()
+    if _inkscape_export(source, out, width_px, area_drawing=True):
+        print("[EPS] ✓ Konverterad med Inkscape")
+        return out
+    _remove(out)
 
-            target_dpi = max(150, int(width_px / 6))
-            cmd = [
-                gs_path,
-                "-dSAFER", "-dBATCH", "-dNOPAUSE", "-dEPSCrop",
-                "-sDEVICE=pngalpha",
-                f"-r{target_dpi}",
-                f"-sOutputFile={output_path}",
-                eps_path,
-            ]
-            print("[EPS] Konverterar via Ghostscript...")
-            subprocess.run(cmd, capture_output=True, timeout=120)
-
-            if os.path.exists(output_path) and os.path.getsize(output_path) > 0:
-                print("[EPS] ✓ Konverterad via Ghostscript")
-                return output_path
-        except Exception as e:
-            print(f"[EPS] Ghostscript-fel: {e}")
-
-    # ── Inkscape (fallback) ────────────────────────────────
-    inkscape_path = find_inkscape()
-    if inkscape_path:
-        try:
-            temp_out = tempfile.NamedTemporaryFile(delete=False, suffix=".png")
-            temp_out.close()
-            output_path = temp_out.name
-
-            cmd = [
-                inkscape_path,
-                eps_path,
-                f"--export-filename={output_path}",
-                f"--export-width={width_px}",
-                "--export-background-opacity=0",
-            ]
-            print("[EPS] Konverterar via Inkscape...")
-            subprocess.run(cmd, capture_output=True, timeout=120)
-
-            if os.path.exists(output_path) and os.path.getsize(output_path) > 0:
-                print("[EPS] ✓ Konverterad via Inkscape")
-                return output_path
-        except Exception as e:
-            print(f"[EPS] Inkscape-fel: {e}")
-
-    print("[EPS] ✗ Varken Ghostscript eller Inkscape hittades")
-    messagebox.showwarning(
-        "EPS-stöd saknas",
-        "Ghostscript eller Inkscape behövs för EPS-filer.\n\n"
-        "Ghostscript: https://ghostscript.com/releases/\n"
-        "Inkscape:    https://inkscape.org/release/"
+    print(
+        "[EPS] ✗ Kunde inte läsa EPS/AI-logotypen. Installera "
+        "Ghostscript eller Inkscape."
     )
     return None
 
 
 # ──────────────────────────────────────────────────────────
-# VÄLJA LOGOTYPFIL
+# FILVÄLJARE
 # ──────────────────────────────────────────────────────────
 
-def select_logo_file() -> Tuple[Optional[str], Optional[str]]:
-    """
-    Öppnar filväljare för logotyp i Logotyp-mappen.
+def select_logo_file(parent: Any = None) -> Tuple[Optional[str], Optional[str]]:
+    """Öppnar filväljaren. Returnerar (sökväg, 'vector'|'raster')."""
+    from tkinter import filedialog  # importeras sent: modulen är GUI-oberoende
 
-    Returns:
-        Tuple (sökväg, typ) där typ är "vector" eller "raster",
-        eller (None, None) om ingen fil valdes.
-    """
     initial_dir = (
-        str(DEFAULT_LOGO_FOLDER)
-        if DEFAULT_LOGO_FOLDER.exists()
-        else None
+        str(DEFAULT_LOGO_FOLDER) if DEFAULT_LOGO_FOLDER.exists() else None
     )
-
     filepath = filedialog.askopenfilename(
-        title="Välj logotyp (SVG, EPS, PNG, JPG...)",
+        parent=parent,
+        title="Välj logotyp (PDF, SVG, EPS, PNG …)",
         initialdir=initial_dir,
         filetypes=[
-            ("Alla bilder",
-             ("*.svg", "*.eps", "*.png", "*.jpg", "*.jpeg",
-              "*.bmp", "*.gif", "*.tiff", "*.tif")),
-            ("Vektorbilder",  ("*.svg", "*.eps", "*.ai")),
-            ("SVG-filer",     ("*.svg",)),
-            ("EPS-filer",     ("*.eps",)),
-            ("PNG-filer",     ("*.png",)),
-            ("JPEG-filer",    ("*.jpg", "*.jpeg")),
-            ("Alla filer",    ("*.*",)),
-        ]
+            ("Vektor & bild",
+             ("*.pdf", "*.svg", "*.eps", "*.ai", "*.png", "*.jpg",
+              "*.jpeg", "*.webp", "*.bmp", "*.gif", "*.tiff", "*.tif")),
+            ("PDF-filer", ("*.pdf",)),
+            ("SVG-filer", ("*.svg",)),
+            ("EPS-filer", ("*.eps", "*.ai")),
+            ("Rasterbilder",
+             ("*.png", "*.jpg", "*.jpeg", "*.webp", "*.bmp", "*.gif",
+              "*.tiff", "*.tif")),
+            ("Alla filer", ("*.*",)),
+        ],
     )
-
     if not filepath or not os.path.isfile(filepath):
         return None, None
 
-    ext      = os.path.splitext(filepath)[1].lower()
-    filename = os.path.basename(filepath)
-
-    if ext in VECTOR_FORMATS:
-        print(f"[Filväljare] ✓ Vald: {filename} (vektor)")
-        return filepath, "vector"
-    elif ext in RASTER_FORMATS:
-        print(f"[Filväljare] ✓ Vald: {filename} (raster)")
-        return filepath, "raster"
-    else:
-        print(f"[Filväljare] ⚠ Okänt format: {ext}, försöker som raster")
-        return filepath, "raster"
+    ext = os.path.splitext(filepath)[1].lower()
+    kind = "vector" if ext in VECTOR_FORMATS else "raster"
+    print(f"[Filväljare] Vald: {os.path.basename(filepath)} ({kind})")
+    return filepath, kind
 
 
 # ──────────────────────────────────────────────────────────
@@ -370,291 +544,162 @@ def select_logo_file() -> Tuple[Optional[str], Optional[str]]:
 # ──────────────────────────────────────────────────────────
 
 def load_and_resize_logo(
-    filepath:      str,
-    max_width_mm:  float = LOGO_MAX_WIDTH_MM,
-    dpi:           int   = DPI,
+    filepath: str,
+    max_width_mm: float = LOGO_MAX_WIDTH_MM,
+    dpi: int = DPI,
 ) -> Optional[Image.Image]:
+    """Läser in en logotyp och skalar den till önskad bredd.
+
+    Stöder PDF (första sidan), SVG, EPS/AI och alla format Pillow klarar
+    av. Returnerar en PIL.RGBA-bild eller None om filen inte kunde läsas.
     """
-    Laddar och skalar logotyp till optimal storlek.
-
-    Stöder SVG (Inkscape), EPS (Ghostscript/Inkscape) och
-    rasterformat (PIL direkt).
-
-    Args:
-        filepath:      Sökväg till bildfilen.
-        max_width_mm:  Maximal bredd i mm.
-        dpi:           Upplösning för konvertering.
-
-    Returns:
-        PIL.Image eller None vid fel.
-    """
-    if not os.path.isfile(filepath):
-        print(f"[Logo] ✗ Filen finns inte: {filepath}")
+    if not filepath or not os.path.isfile(filepath):
+        print(f"[Logo] Filen finns inte: {filepath}")
         return None
 
-    ext          = os.path.splitext(filepath)[1].lower()
-    filename     = os.path.basename(filepath)
-    target_pix   = int(max_width_mm * MM_TO_PIXELS * SVG_EXPORT_DPI_FACTOR)
-    temp_file    = None
+    path = Path(filepath)
+    ext = path.suffix.lower()
+    oversampled_px = max(
+        1, int(round(max_width_mm * (dpi / 25.4) * SVG_EXPORT_DPI_FACTOR))
+    )
+    final_px = max(1, int(round(max_width_mm * (dpi / 25.4))))
+    temp_file: Optional[str] = None
 
     try:
-        if ext == ".svg":
-            print(f"[Logo] SVG detekterad: {filename}")
-            temp_file = convert_svg_to_png(filepath, target_pix)
+        if ext in VECTOR_FORMATS:
+            if ext in PDF_FORMATS:
+                temp_file = convert_pdf_to_png(str(path), oversampled_px)
+            elif ext in SVG_FORMATS:
+                temp_file = convert_svg_to_png(str(path), oversampled_px)
+            else:
+                temp_file = convert_eps_to_png(str(path), oversampled_px)
             if not temp_file:
                 return None
-            img = Image.open(temp_file).convert("RGBA")
-
-        elif ext in {".eps", ".ai"}:
-            print(f"[Logo] EPS/AI detekterad: {filename}")
-            temp_file = convert_eps_to_png(filepath, target_pix)
-            if not temp_file:
-                return None
-            img = Image.open(temp_file).convert("RGBA")
-
+            img = _load_converted_png(temp_file, final_px)
         else:
-            print(f"[Logo] Raster detekterad: {filename}")
-            img = Image.open(filepath)
-            if img.mode not in ("RGB", "RGBA", "L"):
-                img = img.convert("RGBA")
+            with Image.open(path) as source:
+                source_pixels = source.width * source.height
+                if source_pixels > MAX_RASTER_SOURCE_PIXELS:
+                    print(
+                        f"[Logo] Filen är för stor ({source.width}×{source.height} px); "
+                        f"gränsen är {MAX_RASTER_SOURCE_PIXELS:,} pixlar."
+                    )
+                    return None
+                # Begränsa dekoderingen innan RGBA-kopian skapas.
+                scale = min(
+                    1.0,
+                    MAX_RENDER_DIMENSION / max(source.width, source.height),
+                    (MAX_RENDER_PIXELS / max(1, source_pixels)) ** 0.5,
+                )
+                if scale < 1.0:
+                    bounds = (
+                        max(1, int(source.width * scale)),
+                        max(1, int(source.height * scale)),
+                    )
+                    try:
+                        resample = Image.Resampling.LANCZOS
+                    except AttributeError:  # Pillow < 9.1
+                        resample = Image.LANCZOS
+                    source.thumbnail(bounds, resample)
+                img = source.convert("RGBA")
+                img.load()
+            img = _resize_to_width(img, final_px)
 
-        w_px, h_px = img.size
-        print(f"[Logo] Original: {w_px}×{h_px} px")
-
-        if w_px == 0 or h_px == 0:
-            print("[Logo] ✗ Ogiltig bildstorlek!")
+        if img is None or img.width == 0 or img.height == 0:
             return None
-
-        # DYNAMISK SKALNING
-        final_target = int(max_width_mm * MM_TO_PIXELS)
-        if w_px != final_target:
-            ratio = final_target / float(w_px)
-            new_w = max(1, int(w_px * ratio))
-            new_h = max(1, int(h_px * ratio))
-
-            try:
-                resample_filter = Image.Resampling.LANCZOS
-            except AttributeError:
-                resample_filter = Image.LANCZOS  # Pillow < 9.1
-
-            img = img.resize((new_w, new_h), resample_filter)
-            print(f"[Logo] ✓ Skalad: {w_px}×{h_px} → {new_w}×{new_h} px")
-
+        print(
+            f"[Logo] ✓ {path.name}: {img.width}×{img.height} px "
+            f"({ext or 'okänt format'})"
+        )
         return img
 
-    except Exception as e:
-        print(f"[Logo] ✗ Fel: {e}")
+    except Exception as exc:
+        print(f"[Logo] ✗ Fel vid inläsning av {path.name}: {exc}")
         traceback.print_exc()
         return None
-
     finally:
-        if temp_file and os.path.exists(temp_file):
-            try:
-                os.remove(temp_file)
-            except Exception:
-                pass
+        _remove(temp_file)
 
 
 # ──────────────────────────────────────────────────────────
-# BERÄKNA CENTRERAD LOGOTYPPLACERING
+# PLACERING / LISTNING
 # ──────────────────────────────────────────────────────────
 
 def compute_centered_logo_position(
-    logo_w:       float,
-    logo_h:       float,
-    area_x:       float,
-    area_y:       float,
-    area_width:   float,
-    area_height:  float,
+    logo_w: float,
+    logo_h: float,
+    area_x: float,
+    area_y: float,
+    area_width: float,
+    area_height: float,
     min_top_margin: float = LOGO_MIN_TOP_MARGIN_PX,
-    align_top:    bool  = True,
+    align_top: bool = True,
 ) -> Tuple[float, float]:
+    """Returnerar (x, y) för en horisontellt centrerad logotyp.
+
+    PDF-koordinater: origo nere till vänster, y ökar uppåt. `area_y` är
+    områdets nedre kant och `area_y + area_height` den övre kanten.
     """
-    Beräknar (x, y) så att logotypen CENTRERAS horisontellt inom
-    marginalen och placeras med minst `min_top_margin` från toppen.
-
-    Koordinatsystemet följer PDF/reportlab: origo nere till vänster,
-    y ökar uppåt.  `area_y` = nedre kant, `area_y + area_height` = övre kant.
-
-    Args:
-        logo_w, logo_h:            Logotypens bredd/höjd.
-        area_x, area_y:            Områdets nedre vänstra hörn.
-        area_width, area_height:   Områdets storlek.
-        min_top_margin:            Minsta avstånd från övre kant.
-        align_top:                 True = placera vid toppen,
-                                   False = centrera vertikalt.
-
-    Returns:
-        (x, y) för logotypens nedre vänstra hörn.
-    """
-    # Horisontell centrering
-    x = area_x + (area_width - logo_w) / 2.0
-    if x < area_x:
-        x = area_x
-
+    x = max(area_x, area_x + (area_width - logo_w) / 2.0)
     top_edge = area_y + area_height
 
     if align_top:
         y = top_edge - min_top_margin - logo_h
     else:
-        y     = area_y + (area_height - logo_h) / 2.0
-        max_y = top_edge - min_top_margin - logo_h
-        if y > max_y:
-            y = max_y
+        y = area_y + (area_height - logo_h) / 2.0
+        y = min(y, top_edge - min_top_margin - logo_h)
+    return x, max(area_y, y)
 
-    if y < area_y:
-        y = area_y
-
-    return x, y
-
-
-# ──────────────────────────────────────────────────────────
-# LISTA LOGOTYPER I MAPP
-# ──────────────────────────────────────────────────────────
 
 def list_logos_in_folder(folder: Optional[Path] = None) -> List[Path]:
-    """
-    Listar alla logotypfiler i angiven mapp.
-
-    Args:
-        folder: Mapp att söka i (default: Logotyp/).
-
-    Returns:
-        Sorterad lista med Path-objekt.
-    """
-    if folder is None:
-        folder = DEFAULT_LOGO_FOLDER
-
-    if not folder.exists():
+    """Listar alla logotyper i mappen (inklusive PDF)."""
+    target = Path(folder) if folder else DEFAULT_LOGO_FOLDER
+    if not target.is_dir():
         return []
+    return sorted(
+        (p for p in target.iterdir()
+         if p.is_file() and p.suffix.lower() in ALL_FORMATS),
+        key=lambda p: p.name.lower(),
+    )
 
-    logos: List[Path] = []
-    for ext in ALL_FORMATS:
-        logos.extend(folder.glob(f"*{ext}"))
-        logos.extend(folder.glob(f"*{ext.upper()}"))
-
-    return sorted(set(logos))
-
-
-# ──────────────────────────────────────────────────────────
-# KONTROLLERA VERKTYG
-# ──────────────────────────────────────────────────────────
-
-def check_tools() -> dict:
-    """
-    Kontrollerar vilka externa verktyg som är installerade.
-
-    Returns:
-        {'inkscape': path|None, 'ghostscript': path|None}
-    """
-    return {
-        "inkscape":    find_inkscape(),
-        "ghostscript": find_ghostscript(),
-    }
-
-
-# ──────────────────────────────────────────────────────────
-# EXPORTERADE SYMBOLER
-# ──────────────────────────────────────────────────────────
 
 __all__ = [
-    # Copyright
     "get_copyright_year",
     "get_copyright_notice",
-    # Export
     "get_export_folder",
     "get_export_path",
     "DEFAULT_EXPORT_FOLDER",
-    # Verktyg
+    "DEFAULT_LOGO_FOLDER",
     "find_inkscape",
     "find_ghostscript",
+    "find_pdftoppm",
     "check_tools",
-    # Konvertering
+    "convert_pdf_to_png",
     "convert_svg_to_png",
     "convert_eps_to_png",
-    # Logotyp
     "select_logo_file",
     "load_and_resize_logo",
     "compute_centered_logo_position",
     "list_logos_in_folder",
-    # Konstanter
-    "DEFAULT_LOGO_FOLDER",
-    "LOGO_MIN_TOP_MARGIN_PX",
     "RASTER_FORMATS",
     "VECTOR_FORMATS",
+    "PDF_FORMATS",
     "ALL_FORMATS",
+    "LOGO_MIN_TOP_MARGIN_PX",
+    "LOGO_MAX_WIDTH_MM",
+    "DPI",
+    "MM_TO_PIXELS",
 ]
 
 
-# ──────────────────────────────────────────────────────────
-# MODULTEST (körs direkt: python Script/logotyp.py)
-# ──────────────────────────────────────────────────────────
-
 if __name__ == "__main__":
     print(f"\n{'=' * 60}")
-    print("  Logotyp-modul v2.0")
+    print("  Logotyp-modul — stöd för PDF, SVG, EPS, AI och raster")
     print(f"  {get_copyright_notice()}")
     print(f"{'=' * 60}")
-
-    # Export-mapp
-    export_folder = get_export_folder()
-    print(f"\n📤 Export-mapp: {export_folder}")
-    print(f"   {'✓ Finns' if export_folder.exists() else '✗ Saknas (skapas automatiskt)'}")
-
-    # Logotyp-mapp
-    print(f"\n📁 Logotypmapp: {DEFAULT_LOGO_FOLDER}")
-    if DEFAULT_LOGO_FOLDER.exists():
-        print("   ✓ Finns")
-        logos = list_logos_in_folder()
-        if logos:
-            print(f"\n📂 Logotyper ({len(logos)} st):")
-            for logo in logos[:10]:
-                ext = logo.suffix.lower()
-                typ = "vektor" if ext in VECTOR_FORMATS else "raster"
-                print(f"   • {logo.name} ({typ})")
-            if len(logos) > 10:
-                print(f"   ... och {len(logos) - 10} till")
-        else:
-            print("   ⚠ Inga logotyper hittades")
-    else:
-        print("   ✗ Finns inte")
-
-    # Verktyg
-    print("\n🔧 Installerade verktyg:")
-    tools = check_tools()
-    for name, path in tools.items():
-        status = f"✓ {path}" if path else "✗ Ej hittad"
-        print(f"   {name.capitalize()}: {status}")
-
-    # Stödda format
-    print("\n🖼️  Stödda format:")
-    print(f"   Vektor: {', '.join(sorted(VECTOR_FORMATS))}")
-    print(f"   Raster: {', '.join(sorted(RASTER_FORMATS))}")
-
-    # Testa filväljare
-    print(f"\n{'─' * 60}")
-    print("Testar filväljare...")
-
-    from tkinter import Tk
-    root = Tk()
-    root.withdraw()
-
-    filepath, filetype = select_logo_file()
-    if filepath:
-        print(f"\n✓ Vald fil: {os.path.basename(filepath)} ({filetype})")
-        img = load_and_resize_logo(filepath)
-        if img:
-            print(f"✓ Laddad: {img.size[0]}×{img.size[1]} px")
-            print(f"✓ Format: {img.mode}")
-            # Visa var en exporterad fil skulle hamna
-            example_out = get_export_path("test_logo_export.png")
-            print(f"✓ Exempelexport-sökväg: {example_out}")
-        else:
-            print("✗ Kunde inte ladda bilden")
-    else:
-        print("Ingen fil vald")
-
-    root.destroy()
-
-    print(f"\n{'=' * 60}")
-    print("Modultest klart!")
+    print(f"\nLogotypmapp: {DEFAULT_LOGO_FOLDER}")
+    for logo in list_logos_in_folder():
+        print(f"  • {logo.name}")
+    print("\nTillgängliga konverteringsverktyg:")
+    for name, available in check_tools().items():
+        print(f"  {'✓' if available else '✗'} {name}")

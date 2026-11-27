@@ -1,0 +1,10 @@
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+export/
+Profiler/
+Logotyp/
+settings.json
+*.log
+.DS_Store
