@@ -5,10 +5,19 @@
 <!--
 ═══════════════════════════════════════════════════════════════════════════════
   © Copyright Rickard Längkvist {get_copyright_year()} - All rights reserved
-  Specifikation v7.2 — Sammanslagen & uppdaterad
+  Specifikation v7.3 — Sammanslagen & uppdaterad
   Senast uppdaterad: 2026-11-25
   Status: AKTIV UTVECKLING
 <!--
+  v7.3 — ÄNDRINGAR (2026-11-25, v1.7.4 — 10-meddelanderegeln)
+  ───────────────────────────────────────────────────────────────
+  · PDFSORTER_FORSLAG.md: batch #1 → arkiverad; batch #2 visad (10 nya
+    förslag: tray-ikon, skriv ut direkt, headless-CLI, dra-och-släpp,
+    samlad serie-PDF, filnamnsmall, GUI-språk, "Vad är nytt"-popup,
+    settings-självdiagnos, dela-fil). Inga återbrukade (25-listan +
+    batch #1 uteslutna). Räknare: nästa batch efter 10 meddelanden.
+  · Ingen kodändring — release enligt HÅRD regel (repo == Latest).
+-->
   v7.2 — ÄNDRINGAR (2026-11-25, v1.7.3 — P0: QUrl från fel Qt-modul)
   ───────────────────────────────────────────────────────────────
   · RAPPORTERAD KRASCH: ImportError: cannot import name 'QUrl' from

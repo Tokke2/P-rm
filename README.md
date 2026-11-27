@@ -6,6 +6,16 @@ PDF-etiketter för pärmar och arkivering: ryggetiketter (41×64 mm /
 
 ## Nya förbättringar
 
+### v1.7.4 — förslagsbatch #2 (10-meddelanderegeln)
+
+* Uppdaterarens JSON-bootstrap bekräftad live av användaren (ok/verified,
+  5 filer, backup borttagen vid verifiering).
+* PDFSORTER_FORSLAG.md: batch #1 arkiverad, **batch #2 visad** (10 nya,
+  icke-återbrukade förslag i Qt-eran: tray-ikon, skriv ut direkt,
+  headless-CLI, dra-och-släpp-rader, samlad serie-PDF, filnamnsmall,
+  GUI-språk, "Vad är nytt", settings-självdiagnos, dela-fil).
+* Ingen kodändring i GUI/moduler — dokument-/ledger-uppdatering.
+
 ### v1.7.3 — P0-buggfix: QUrl importerad från fel Qt-modul
 
 * **Kraschfix**: `QUrl` bor i **QtCore** (inte QtGui) — `cannot import

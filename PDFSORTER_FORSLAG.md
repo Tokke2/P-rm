@@ -7,10 +7,10 @@ chattmeddelande läggs en ny batch med **10 helt nya förslag** — aldrig
 > **Städad 2026-11-25:** de gamla v1.0.0-raderna är borttagna. Filen började
 > om ren (filen fanns inte i detta repo tidigare).
 
-**Räknare:** batch #1 visad 2026-11-25 — nästa batch (10 helt nya förslag,
-ej återbrukade) visas efter 10 chattmeddelanden därefter. Båda listtyperna
-(10-batchen och 25-förslagslistan) ska alltid även **skrivas i chatten**
-(AGENTS.md §6).
+**Räknare:** batch #2 visad 2026-11-25 (efter updater-JSON + 10 meddelanden
+sedan batch #1) — nästa batch (10 helt nya förslag, ej återbrukade) visas
+efter 10 chattmeddelanden därefter. Båda listtyperna (10-batchen och
+25-förslagslistan) ska alltid även **skrivas i chatten** (AGENTS.md §6).
 
 ---
 
@@ -47,7 +47,7 @@ ej återbrukade) visas efter 10 chattmeddelanden därefter. Båda listtyperna
 
 ---
 
-## Aktiv batch — #1 (2026-11-25) · 10 nya förslag
+## Arkiverad batch — #1 (2026-11-25) · 10 nya förslag
 
 **Statusuppdatering 2026-11-25 (v1.1.0):** användaren valde att bygga
 25-listans nr 1, 2, 10, 11, 16, 22 + en checkruta per rad. De är nu
@@ -66,6 +66,26 @@ förslag #1–#25). Inga av dem får återbrukas i nya listor.
 | 8 | Mörkt/ljust tema | Temaväljare med hög kontrast för utskriftsmiljöer med svagt ljus; följer systeminställning. | Ny |
 | 9 | Utskriftsarkiv med sökning | Historik over skapade PDF:er med sökning, återskapande och statistik per månad. | Ny |
 | 10 | Energisnål läge | Lazy-rendering och paus av förhandsjobb vid batteridrift; lägre minnesanvändning vid stora listor. | Ny |
+
+---
+
+## Aktiv batch — #2 (2026-11-25) · 10 nya förslag
+
+Qt-era (v1.7.x): menyer, stöd-meny, autostart och auto-uppdatering finns.
+Batch #2 — helt nya förslag, inget återbrukat från 25-listan eller batch #1:
+
+| # | Förslag | Beskrivning |
+|---|---------|-------------|
+| 1 | Systemfältsikon (tray) | Minimera till tray med snabbmeny (sök uppdatering, Stöd-meny, avsluta); toast-notis när auto-uppdatering 00:00 installerat något. |
+| 2 | Skriv ut direkt | "🖨 Skriv ut"-knapp bredvid SKAPA PDF — skickar PDF:n direkt till standardskrivaren (Windows print-verb), ingen filjakt i Utforskaren. |
+| 3 | Kommandoradsläge (headless) | `python folder.py --svep 2026 --sprak se` genererar utan GUI — scriptbart/schemalägbart via Windows Schemaläggaren. |
+| 4 | Dra-och-släpp för etikettrader | Ordna om etikettraderna med Qt-native move-rows: dra rader i valfri ordning, infoga mellan rader — tillsammans med checkrutan per rad. |
+| 5 | Samlad serie-PDF (val) | Utöver separata filer: en samlad PDF för hela pärmserien (alla rader i ett dokument) — kryssbar "Skapa även samlad PDF". |
+| 6 | Anpassningsbara filnamn | Namnmall för utdata, t.ex. `{klient}_{period}_{datum}.pdf` med datum/tid/placeholders — ingen manuellt ombytnamning. |
+| 7 | GUI-språk (sv/en) | Växla gränssnittets språk i menyn (verifikatens se/en/no finns redan — detta gäller själva appen). |
+| 8 | "Vad är nytt"-popup | Vid uppdaterad version: liten dialog med release-noterna (lokalt ur release-metadata) + menyval "Vad är nytt?". |
+| 9 | Självdiagnos av settings | Kontrollerar settings.json vid start; reparerar/återställer från intern backup vid korrupt fil (loggas på Loggar-fliken). |
+| 10 | Dela skapad fil | Högerklick/knapp "Dela" — e-posta PDF:n via standardklienten (mailto med instruktion) eller öppna mappen med filen markerad. |
 
 ---
 
