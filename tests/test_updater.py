@@ -474,5 +474,61 @@ class AutoUpdTests(unittest.TestCase):
             )
 
 
+class InaktivaFilerTests(unittest.TestCase):
+    """v1.8.1: updateraren rensar INAKTIVA filer efter uppdatering
+    (__pycache__, *.pyc/pyo/tmp, tomma mappar) — användardata skyddas."""
+
+    def setUp(self) -> None:
+        self.tmp = tempfile.TemporaryDirectory()
+        self.root = Path(self.tmp.name)
+        (self.root / "tests").mkdir()
+        (self.root / "tests" / "__pycache__").mkdir()
+        (self.root / "tests" / "__pycache__" / "mod.cpython-311.pyc").write_text("x")
+        (self.root / "tests" / "gammal.pyo").write_text("x")
+        (self.root / "settings.json.tmp").write_text("halvskriven")
+        (self.root / "Loggar").mkdir()          # skyddad (SKIP_DIRS)
+        (self.root / "export").mkdir()          # skyddad (SKIP_DIRS)
+
+    def tearDown(self) -> None:
+        self.tmp.cleanup()
+
+    def test_removes_pycache_tmp_and_bytecode(self) -> None:
+        removed = updater.cleanup_inactive_files(self.root)
+        self.assertFalse(list(self.root.rglob("__pycache__")))
+        self.assertFalse(list(self.root.rglob("*.tmp")))
+        self.assertFalse(list(self.root.rglob("*.pyo")))
+        self.assertIn("tests/__pycache__", removed)
+        self.assertIn("settings.json.tmp", removed)
+
+    def test_protects_user_data_dirs(self) -> None:
+        updater.cleanup_inactive_files(self.root)
+        self.assertTrue((self.root / "Loggar").is_dir())
+        self.assertTrue((self.root / "export").is_dir())
+        self.assertFalse(any("Loggar" in r for r in
+                             updater.cleanup_inactive_files(self.root)))
+
+    def test_removes_empty_dirs_after_file_removal(self) -> None:
+        # Som apply_update: to_remove-filer tas bort först → mappen blir
+        # tom → städningen tar bort den.
+        (self.root / "tests" / "gammal_test.py").write_text("x")
+        (self.root / "tests" / "gammal_test.py").unlink()
+        removed = updater.cleanup_inactive_files(self.root)
+        self.assertFalse((self.root / "tests").exists())
+        self.assertIn("tests", removed)
+
+    def test_keeps_nonempty_dirs(self) -> None:
+        (self.root / "Script" / "__init__.py").parent.mkdir(exist_ok=True)
+        (self.root / "Script" / "__init__.py").write_text("")
+        updater.cleanup_inactive_files(self.root)
+        self.assertTrue((self.root / "Script" / "__init__.py").is_file())
+
+    def test_apply_update_reports_stadade(self) -> None:
+        # apply_update:s lyckade resultat har nyckeln "städade".
+        import inspect
+        source = inspect.getsource(updater.apply_update)
+        self.assertIn('"städade"', source)
+        self.assertIn("cleanup_inactive_files(current_root)", source)
+
+
 if __name__ == "__main__":
     unittest.main()

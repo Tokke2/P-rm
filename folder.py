@@ -161,6 +161,7 @@ _I18N: dict = {
     "Ingen logotyp vald": "No logo selected",
     "✕ Ta bort logotyp": "✕ Remove logo",
     # Inställningar
+    "Inställningar": "Settings",
     "Autoanpassa text": "Auto-fit text",
     "Flera etiketter": "Multiple labels",
     "Klipplinjer (kant till kant)": "Cut lines (edge to edge)",
@@ -233,11 +234,17 @@ def apply_language(window) -> None:
                 if text in mapping:
                     widget.setTabText(index, mapping[text])
         elif isinstance(
-            widget, (QCheckBox, QRadioButton, QPushButton, QGroupBox, QLabel)
+            widget, (QCheckBox, QRadioButton, QPushButton, QLabel)
         ):
             text = widget.text()
             if text in mapping:
                 widget.setText(mapping[text])
+        elif isinstance(widget, QGroupBox):
+            # QGroupBox har title()/setTitle() — INTE text()/setText()
+            # (P0-fix v1.8.1: AttributeError vid språktillämpning).
+            text = widget.title()
+            if text in mapping:
+                widget.setTitle(mapping[text])
     # Menybar (två nivåer: toppmeny → valfria submenyer)
     for top_action in window.menuBar().actions():
         if top_action.text() in mapping:

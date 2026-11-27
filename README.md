@@ -6,6 +6,26 @@ PDF-etiketter för pärmar och arkivering: ryggetiketter (41×64 mm /
 
 ## Nya förbättringar
 
+### v1.8.1 — P0-buggfix språkbyte + updateraren städar inaktiva filer
+
+* **Kraschfix (språk/GUI)**: `apply_language` kallade `text()` på
+  QGroupBox — men QGroupBox har `title()`/`setTitle()` (v1.8.0-
+  regression). Nu separerad gren; "Inställningar" är också översättnings-
+  klar. Vakttest ser till att grenen förblir separerad.
+* **Updateraren städar INAKTIVA filer** (användarönskemål): efter varje
+  lyckad uppdatering rensas
+  * `__pycache__`-mappar + `*.pyc`/`*.pyo` (bytecode)
+  * överblivna `*.tmp` (t.ex. halvskriven settings.json.tmp)
+  * **tomma mappar** (när en mapp blivit tom efter att dess filer
+    raderats som utgångna)
+  * Användardata skyddas alltid: `Loggar/`, `Logotyp/`, `Profiler/`,
+    `export/`, `Uppdatering_backup/` röras aldrig.
+  * Antal städade poster rapporteras i JSON-bootstrap (`"städade": N`)
+    och i apploggen.
+* Tester: 7 nya (städning 5 + språk-vakt 2) — 145 st totalt.
+* Uppdatera: `python Script/updater.py` (v1.8.1 städar samtidigt som den
+  uppdaterar).
+
 ### v1.8.0 — tray, skriv ut direkt, språk sv/en, mushjul, start utan terminal + 2 förslag
 
 * **Systemfältsikon (tray) (#1)**: ikon i systemfältet med snabbmeny (visa,

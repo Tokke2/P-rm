@@ -5,10 +5,24 @@
 <!--
 ═══════════════════════════════════════════════════════════════════════════════
   © Copyright Rickard Längkvist {get_copyright_year()} - All rights reserved
-  Specifikation v7.4 — Sammanslagen & uppdaterad
+  Specifikation v7.5 — Sammanslagen & uppdaterad
   Senast uppdaterad: 2026-11-25
   Status: AKTIV UTVECKLING
 <!--
+  v7.5 — ÄNDRINGAR (2026-11-25, v1.8.1 — P0 språk-krasch + inaktiv-städning)
+  ───────────────────────────────────────────────────────────────
+  · RAPPORTERAD KRASCH: AttributeError: QGroupBox has no attribute
+    'text' — apply_language kallade widget.text() på QGroupBox (har
+    title()/setTitle()). Fix: separat isinstance-gren QGroupBox med
+    title/setTitle. "Inställningar" tillagd i _I18N.
+  · UPDATERAREN STÄDAR INAKTIVA FILERT (användarönskemål):
+    cleanup_inactive_files(root) — __pycache__ + *.pyc/*.pyo + *.tmp +
+    tomma mappar (efter to_remove). SKIP_DIRS skyddas UTOM __pycache__
+    (hash-skip ≠ städ-skydd). Körs i apply_update steg 4 (efter
+    verifiering); resultat-nyckel "städade" + applogg-rad. Publikt
+    alias cleanup_inactive_files i __all__.
+  · Tester: 7 nya — 145 totalt.
+-->
   v7.4 — ÄNDRINGAR (2026-11-25, v1.8.0 — tray/print/språk/wheel/diagnos)
   ───────────────────────────────────────────────────────────────
   · #1 TRAY: QSystemTrayIcon (Visa/Uppdatering/act_auto_update synkad/

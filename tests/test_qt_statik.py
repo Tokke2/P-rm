@@ -381,5 +381,23 @@ class V1_8FunktionerTests(unittest.TestCase):
             self.assertIn(key, QT_SOURCE)
 
 
+class P0_1_8_1Tests(unittest.TestCase):
+    """P0-regression v1.8.1: QGroupBox har title()/setTitle() — inte
+    text()/setText(). apply_language kraschade vid språktillämpning."""
+
+    def test_groupbox_uses_title_api(self) -> None:
+        self.assertIn("elif isinstance(widget, QGroupBox):", QT_SOURCE)
+        self.assertIn("widget.setTitle(mapping[text])", QT_SOURCE)
+        self.assertIn("widget.title()", QT_SOURCE)
+        # QLabel/QCheckBox-körs med text(); QGroupBox är SEPARAT gren
+        self.assertIn(
+            "(QCheckBox, QRadioButton, QPushButton, QLabel)", QT_SOURCE
+        )
+
+    def test_settings_groupbox_translatable(self) -> None:
+        self.assertIn('"Inställningar"', QT_SOURCE)
+        self.assertIn("Inställningar", QT_SOURCE)
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -236,6 +236,72 @@ def _remove_backup_dir() -> None:
         shutil.rmtree(BACKUP_DIR, ignore_errors=True)
 
 
+def _cleanup_inactive_files(root: Path) -> List[str]:
+    """Rensar INAKTIVA filer/rester efter en uppdatering (användarönskemål).
+
+    • __pycache__-mappar och *.pyc/*.pyo (bytecode — regenereras alltid)
+    • överblivna *.tmp (t.ex. halvskriven settings.json.tmp)
+    • tomma mappar (t.ex. en mapp som blev tom när alla dess filer
+      raderades som to_remove) — men ALDRIG skyddade mappar (SKIP_DIRS:
+      Loggar/Logotyp/Profiler/export/Uppdatering_backup/.git/venv …)
+
+    Användardata pekas aldrig på: rensningen går bara åt filtyper som
+    inte ingår i hash-jämförelsen, och tomma-mapp-städningen hoppar över
+    SKIP_DIRS. Returnerar lista med relativta sökvägar som togs bort.
+    """
+    removed: List[str] = []
+    root = Path(root)
+    if not root.is_dir():
+        return removed
+
+    def _protected(path: Path) -> bool:
+        # __pycache__ är skippat i HASH-jämförelsen men ska ändå STÄDAS
+        # (inaktiv bytecode) — det är därför det inte skyddas här.
+        rel = path.relative_to(root)
+        return any(
+            part in SKIP_DIRS and part != "__pycache__"
+            for part in rel.parts
+        )
+
+    # 1) __pycache__ + bytecode
+    for cache_dir in sorted(root.rglob("__pycache__")):
+        if _protected(cache_dir):
+            continue
+        shutil.rmtree(cache_dir, ignore_errors=True)
+        removed.append(cache_dir.relative_to(root).as_posix())
+    for pattern in ("*.pyc", "*.pyo", "*.tmp"):
+        for stray in root.rglob(pattern):
+            if _protected(stray) or not stray.is_file():
+                continue
+            try:
+                stray.unlink()
+                removed.append(stray.relative_to(root).as_posix())
+            except OSError:
+                pass
+
+    # 2) tomma mappar (innerst först) — skippar skyddade + roten själv
+    for dirpath in sorted(
+        (p for p in root.rglob("*") if p.is_dir()), reverse=True
+    ):
+        if dirpath == root or _protected(dirpath):
+            continue
+        try:
+            next(dirpath.iterdir())          # har innehåll → ok
+        except StopIteration:
+            try:
+                dirpath.rmdir()
+                removed.append(dirpath.relative_to(root).as_posix())
+            except OSError:
+                pass
+        except OSError:
+            pass
+    return removed
+
+
+# Publikt alias (API) — se _cleanup_inactive_files för dokumentationen.
+cleanup_inactive_files = _cleanup_inactive_files
+
+
 def apply_update(
     current_root: Path,
     release_root: Path,
@@ -293,10 +359,12 @@ def apply_update(
 
     # 4) Lyckad verifiering → nu (och först nu) tas backupen bort.
     _remove_backup_dir()
+    cleaned = _cleanup_inactive_files(current_root)
     return {
         "ok": True, "verified": True,
         "copied": copied, "removed": removed,
         "unchanged": len(diff["unchanged"]),
+        "städade": len(cleaned),
         "backup_removed": True,
     }
 
@@ -482,6 +550,7 @@ def _run_update_locked(
             log.log_app(
                 f"Uppdatering till {tag} klar: {result.get('copied')} filer "
                 f"uppdaterade, {result.get('removed')} raderade, "
+                f"{result.get('städade', 0)} inaktiva städade, "
                 f"verifierad OK, backup borttagen"
             )
             result.update({"tag": tag, "steg": "klar", "uppdaterad": True})
@@ -501,6 +570,7 @@ __all__ = [
     "get_latest_release_info", "download_release_archive",
     "extract_archive", "build_file_hashes", "compare_files",
     "apply_update", "check_for_new_release", "run_update",
+    "cleanup_inactive_files",
     "next_midnight_delay", "auto_update", "CATCHUP_WINDOW_MIN",
 ]
 
