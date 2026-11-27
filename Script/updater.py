@@ -360,7 +360,7 @@ def run_update(
             "fel": f"Releasen pekar på {target!r} — main är förbjudet (§1).",
         }
 
-    installed = read_installed_version()
+    installed = read_installed_version(current_root / "VERSION.txt")
     if not is_newer_release(tag, installed):
         log.log_app(f"Redan senaste version ({installed} = {tag})")
         return {
