@@ -5,10 +5,26 @@
 <!--
 ═══════════════════════════════════════════════════════════════════════════════
   © Copyright Rickard Längkvist {get_copyright_year()} - All rights reserved
-  Specifikation v7.5 — Sammanslagen & uppdaterad
+  Specifikation v7.6 — Sammanslagen & uppdaterad
   Senast uppdaterad: 2026-11-25
   Status: AKTIV UTVECKLING
 <!--
+  v7.6 — ÄNDRINGAR (2026-11-25, v1.9.0 — design: modern/enklare/proffsig)
+  ───────────────────────────────────────────────────────────────
+  · build_qss() SKRIVEN OM: kort-look (QGroupBox radius 10 + mjuk kant),
+    platta understryknings-flikar (accent 3px), tysta sekundära knappar
+    (vit/kant) + fyllda accentknappar, hover/pressed/disabled/fokus-
+    tillstånd, rundade indikatorer, ränder i Loggar-tabellen (+
+    setAlternatingRowColors(True)), ljus tabellheader, stilrena menyer
+    (QMenuBar/QMenu), mörk QToolTip, smala 8px scrollbars utan pilar.
+    Brand: #1E3A5F + #F6A03C bevarade.
+  · ENKLARE UI: ALLA dev-suffix "(#N)"/"(REQ-K4)" borttagna från synliga
+    texter (sv + en) — vakttest DesignTests.test_no_dev_suffixes_in_gui
+    förbjuder dem i hela källan. Antal etiketter horisontell rad.
+    Fönstertitel utan årtal. app.setWindowIcon (taskbar-ikon).
+  · Inga funktionsändringar — samma layout/flow; i18n speglar nya texter.
+  · Tester: 5 nya design-vakter — 150 totalt.
+-->
   v7.5 — ÄNDRINGAR (2026-11-25, v1.8.1 — P0 språk-krasch + inaktiv-städning)
   ───────────────────────────────────────────────────────────────
   · RAPPORTERAD KRASCH: AttributeError: QGroupBox has no attribute

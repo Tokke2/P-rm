@@ -6,6 +6,30 @@ PDF-etiketter för pärmar och arkivering: ryggetiketter (41×64 mm /
 
 ## Nya förbättringar
 
+### v1.9.0 — ny design: snyggare, enklare, proffsigare, modernare
+
+* **Modern QSS design-system** (brandfärgerna bevarade: djupblå + orange):
+  * **Kort-look**: varje grupp (Etikettyp, Logotyp, Inställningar,
+    Verifikat) är ett vitt kort med mjuk kant + rundade hörn
+  * **Platta "understryknings"-flikar** — aktiv flik markeras med orange
+    underkant istället för tyng 3D-panel
+  * **Tysta sekundära knappar** (vit + kant, hover-blå nyans) så att den
+    fyllda orange accentknappen (SKAPA PDF) verkligen sticker ut
+  * **Mjuka tillstånd**: hover, pressed, disabled, fokus-orange ring på
+    inmatningar, stilrena menyer, mörk tooltip, smala (8px) scrollbars
+  * Kryssrutor/radioknappar med rundade indikatorer i accentfärg;
+    Loggar-tabellen med ränder + ljus headerrad
+* **Enklare UI** — samma funktioner, mindre brus:
+  * Utvecklar-suffix borttagna från alla synliga texter: inte längre
+    "(#1)"/"(#22)"/"(#16)"/"(REQ-K4)" i knappar/rutor/menyer (vakttest
+    ser till att de aldrig kommer tillbaka)
+  * "Antal etiketter" är nu en horisontell rad; ren fönstertitel
+    ("Pärmetikett Generator" utan årtal)
+  * Appens logotyp är nu även **ikon i aktivitetsfältet** (taskbar)
+* Språkbytet (sv/en) fungerar som vanligt live — alla nya texter är
+  översatta; mushjul, tray, autostart osv. oförändrade
+* Tester: 5 nya design-vakttester — **150 st totalt**
+
 ### v1.8.1 — P0-buggfix språkbyte + updateraren städar inaktiva filer
 
 * **Kraschfix (språk/GUI)**: `apply_language` kallade `text()` på

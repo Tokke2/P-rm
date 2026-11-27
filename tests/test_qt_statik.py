@@ -39,12 +39,13 @@ class FolderQtStrukturTests(unittest.TestCase):
     def test_same_buttons_as_tkinter_version(self) -> None:
         for text in (
             "📄 SKAPA PDF",
-            "🗂 Skapa arkivindex (A4, platskoder) (#1)",
-            "⬇️ Sök uppdatering (REQ-K4)",
+            "🗂 Skapa arkivindex (A4)",
+            "⬇️ Sök uppdatering",
             "🕒 Auto-uppdatering 00:00 varje dag",
-            "🚀 Autostart vid inloggning (utan terminal)",
+            "🚀 Autostart vid inloggning",
             "⭐ Använd appens logotyp (vektor)",
             "🧾 Skapa BÅDA (1 & 2 per månad)",
+            "🖨 Skriv ut direkt",
         ):
             self.assertIn(text, QT_SOURCE, f"Saknad knapptext: {text}")
 
@@ -319,7 +320,7 @@ class V1_8FunktionerTests(unittest.TestCase):
 
     def test_minimize_to_tray_checkbox_and_close(self) -> None:
         self.assertIn("minimize_to_tray", QT_SOURCE)
-        self.assertIn("Minimera till systemfältet (tray) vid stängning", QT_SOURCE)
+        self.assertIn("Minimera till systemfältet vid stängning", QT_SOURCE)
         self.assertIn("event.ignore()", QT_SOURCE)
         self.assertIn("Minimerad till systemfältet", QT_SOURCE)
 
@@ -397,6 +398,48 @@ class P0_1_8_1Tests(unittest.TestCase):
     def test_settings_groupbox_translatable(self) -> None:
         self.assertIn('"Inställningar"', QT_SOURCE)
         self.assertIn("Inställningar", QT_SOURCE)
+
+
+class DesignTests(unittest.TestCase):
+    """v1.9.0: modern design — snyggare/enklare/proffsigare GUI."""
+
+    def test_qss_modern_system(self) -> None:
+        """QSS innehåller moderna byggstenar (kort, fokus, tooltip)."""
+        self.assertIn("QGroupBox::title", QT_SOURCE)
+        self.assertIn("border-radius: 10px", QT_SOURCE)
+        self.assertIn(":focus", QT_SOURCE)
+        self.assertIn("QToolTip", QT_SOURCE)
+        self.assertIn("QMenuBar::item:selected", QT_SOURCE)
+        self.assertIn("QMenu::item:selected", QT_SOURCE)
+        self.assertIn("alternate-background-color", QT_SOURCE)
+        self.assertIn("QTabBar::tab:selected", QT_SOURCE)
+        self.assertIn("QPushButton#accent", QT_SOURCE)
+        # Brandfärgerna kvar i paletten (ägna konstanter):
+        self.assertIn('#1E3A5F', QT_SOURCE)
+        self.assertIn('#F6A03C', QT_SOURCE)
+
+    def test_no_dev_suffixes_in_gui(self) -> None:
+        """Enklare UI: inga utvecklar-suffix i synliga etiketter."""
+        for fragment in ("(#1)", "(#2)", "(#16)", "(#22)", "(REQ-K4)"):
+            self.assertNotIn(
+                fragment, QT_SOURCE,
+                f"Dev-suffix {fragment} ska inte synas i GUI-texter",
+            )
+
+    def test_clean_window_title_and_app_icon(self) -> None:
+        # Årtal i fönstertitel = brus; ikon i aktivitetsfältet = proffs.
+        self.assertIn('self.setWindowTitle("Pärmetikett Generator")', QT_SOURCE)
+        self.assertIn("app.setWindowIcon", QT_SOURCE)
+
+    def test_simpler_layout_details(self) -> None:
+        # Antal etiketter = horisontell rad; logg-tabellen ränder.
+        self.assertIn("antal_row = QHBoxLayout()", QT_SOURCE)
+        self.assertIn("setAlternatingRowColors(True)", QT_SOURCE)
+
+    def test_wheel_focus_still_active(self) -> None:
+        # Design-uppdateringen fick inte tappa mushjuls-funktionen.
+        self.assertIn("class ParmComboBox(QComboBox)", QT_SOURCE)
+        self.assertIn("class ParmSpinBox(QSpinBox)", QT_SOURCE)
 
 
 if __name__ == "__main__":

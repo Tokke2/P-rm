@@ -8,7 +8,7 @@
 #   * Loggar-tabell med INBYGGD sortering (klick) och kolumnflyttning
 #     (dra) enligt §10
 #   * Autostart vid inloggning (Script/autostart.py, pythonw — §9)
-#   * Auto-uppdatering 00:00 varje dag (REQ-K4)
+#   * Auto-uppdatering 00:00 varje dag
 #   * Utan terminalfönster: starta med pythonw.exe (§9)
 #
 # Alla beräkningsmoduler är GUI-oberoende och återanvänds oförändrat:
@@ -138,7 +138,7 @@ _I18N: dict = {
     "Loggar": "Logs",
     # Menyer
     "&Uppdatera": "&Update",
-    "⬇️ Sök uppdatering nu (REQ-K4)": "⬇️ Check for updates now (REQ-K4)",
+    "⬇️ Sök uppdatering nu": "⬇️ Check for updates now",
     "&Hjälp & Stöd": "&Help & Support",
     "💖 Stöd Pärmetikett Generator…": "💖 Support Pärmetikett Generator…",
     "Donera via PayPal": "Donate via PayPal",
@@ -147,8 +147,8 @@ _I18N: dict = {
     "🌐 GitHub-projektet": "🌐 GitHub project",
     "🐞 Rapportera fel / förslag": "🐞 Report bugs / suggestions",
     "ℹ️ Om Pärmetikett Generator": "ℹ️ About Pärmetikett Generator",
-    "📎 Skapa skrivbordsgenväg (utan terminal)":
-        "📎 Create desktop shortcut (no terminal)",
+    "📎 Skapa skrivbordsgenväg":
+        "📎 Create desktop shortcut",
     # Etikettyp
     "Etikettyp": "Label type",
     "Smal (41×64 mm)": "Slim (41×64 mm)",
@@ -165,22 +165,22 @@ _I18N: dict = {
     "Autoanpassa text": "Auto-fit text",
     "Flera etiketter": "Multiple labels",
     "Klipplinjer (kant till kant)": "Cut lines (edge to edge)",
-    "Förstärkta hörnmarkeringar (#22)": "Reinforced corner marks (#22)",
-    "Streckkod (Code 128) på etiketten (#2)": "Barcode (Code 128) on label (#2)",
-    "Automatisk logotypkontrast (#16)": "Automatic logo contrast (#16)",
+    "Förstärkta hörnmarkeringar": "Reinforced corner marks",
+    "Streckkod (Code 128) på etiketten": "Barcode (Code 128) on label",
+    "Automatisk logotypkontrast": "Automatic logo contrast",
     "Antal etiketter:": "Number of labels:",
     "📄 SKAPA PDF": "📄 CREATE PDF",
     "🖨 Skriv ut direkt": "🖨 Print now",
-    "🗂 Skapa arkivindex (A4, platskoder) (#1)":
-        "🗂 Create archive index (A4, location codes) (#1)",
+    "🗂 Skapa arkivindex (A4)":
+        "🗂 Create archive index (A4)",
     "📤 Öppna Export-mappen": "📤 Open Export folder",
-    "⬇️ Sök uppdatering (REQ-K4)": "⬇️ Check for updates (REQ-K4)",
+    "⬇️ Sök uppdatering": "⬇️ Check for updates",
     "🕒 Auto-uppdatering 00:00 varje dag": "🕒 Auto-update 00:00 daily",
-    "🚀 Autostart vid inloggning (utan terminal)":
-        "🚀 Auto-start at login (no terminal)",
-    "📁 Minimera till systemfältet (tray) vid stängning":
+    "🚀 Autostart vid inloggning":
+        "🚀 Auto-start at login",
+    "📁 Minimera till systemfältet vid stängning":
         "📁 Minimize to system tray on close",
-    "📄 Skapa även separata PDF:er per rad (utöver den samlade)":
+    "📄 Skapa även en PDF per rad":
         "📄 Also create separate PDFs per row (in addition to combined)",
     # Verifikat
     "Verifikat (hela året)": "Vouchers (full year)",
@@ -361,17 +361,17 @@ ETIKETTYPER:
   • Index:      12 rader på A4 med numrering
 
 VERIFIKAT — HELA ÅRET:
-  • Period: månader, kvartal (Q1–Q4) eller halvår (H1–H2)  [#10]
-  • Språk: se / en / no styr månadsförkortningarna          [#11]
+  • Period: månader, kvartal (Q1–Q4) eller halvår (H1–H2)
+  • Språk: se / en / no styr månadsförkortningarna
   • "Skapa BÅDA" gör verifikat_&lt;år&gt;_1_per_manad.pdf och
     verifikat_&lt;år&gt;_2_per_manad.pdf
 
 NYA FUNKTIONER:
   • Checkruta per etikettrad — kryssa för vad som skrivs ut
-  • Streckkod (Code 128-B) i etikettens underkant             [#2]
-  • Förstärkta hörnmarkeringar för exakt trimning             [#22]
-  • Automatisk logotypkontrast (mörka logotyper → vit baksida) [#16]
-  • Arkivindex (A4) med platskoder A1-01, A1-02 …             [#1]
+  • Streckkod (Code 128-B) i etikettens underkant
+  • Förstärkta hörnmarkeringar för exakt trimning
+  • Automatisk logotypkontrast (mörka logotyper → vit baksida)
+  • Arkivindex (A4) med platskoder A1-01, A1-02 …
 
 LOGGAR (§8):
   • Fellogg = alla AKTIVA fel; åtgärdade försvinner automatiskt
@@ -438,66 +438,106 @@ def get_copyright_notice() -> str:
 # ──────────────────────────────────────────────────────────
 
 def build_qss() -> str:
+    """Modern design-system (v1.9.0): lugn palett, kort-look, tydlig
+    typhierarki, mjuka hover-/fokus-tillstånd. Brandfärger bevarade:
+    djupblå #1E3A5F + orange #F6A03C."""
     return f"""
-QMainWindow, QWidget {{ background: {BG}; color: #1B2A3A; }}
-QLabel#h1 {{ font-size: 12pt; font-weight: 700; color: {PRIMARY}; }}
-QLabel#muted {{ color: #7A8797; }}
-QTabWidget::pane {{
-    border: 1px solid #D5DCE4; background: white;
-    border-radius: 6px; top: -1px;
-}}
+QWidget {{ background: {BG}; color: #1E2A38; font-size: 10pt; }}
+QLabel#h1 {{ font-size: 13pt; font-weight: 700; color: {PRIMARY}; }}
+QLabel#muted {{ color: #6B7A8C; font-size: 9pt; }}
+
+/* Flikar — platta "understryknings"-flikar */
+QTabWidget::pane {{ border: none; background: white; border-radius: 10px; top: 6px; }}
 QTabBar::tab {{
-    padding: 8px 20px; background: #E8EDF3;
-    border: 1px solid #D5DCE4; border-bottom: none;
-    border-top-left-radius: 6px; border-top-right-radius: 6px;
+    padding: 10px 24px; margin-right: 4px;
+    background: transparent; color: #6B7A8C;
+    border-bottom: 3px solid transparent; font-weight: 600;
 }}
-QTabBar::tab:selected {{
-    background: white; color: {PRIMARY};
-    font-weight: 600; border-bottom: 2px solid {ACCENT};
-}}
-QPushButton {{
-    background: {PRIMARY}; color: white; border: none;
-    padding: 8px 14px; border-radius: 6px;
-}}
-QPushButton:hover {{ background: {PRIMARY_LIGHT}; }}
-QPushButton:pressed {{ background: #16283F; }}
-QPushButton:disabled {{ background: #C4CFDA; }}
-QPushButton#accent {{ background: {ACCENT}; color: {PRIMARY};
-    font-weight: 700; }}
-QPushButton#accent:hover {{ background: #FFB55C; }}
-QPushButton#flat {{ background: #E8EDF3; color: {PRIMARY}; }}
+QTabBar::tab:hover {{ color: {PRIMARY}; }}
+QTabBar::tab:selected {{ color: {PRIMARY}; border-bottom: 3px solid {ACCENT}; }}
+
+/* Kort (QGroupBox) */
 QGroupBox {{
-    font-weight: 600; border: 1px solid #D5DCE4;
-    border-radius: 8px; margin-top: 12px; background: white;
-    padding: 6px;
+    font-weight: 600; color: {PRIMARY};
+    border: 1px solid #E1E8F0; border-radius: 10px;
+    margin-top: 14px; background: white; padding: 8px;
 }}
-QGroupBox::title {{
-    subcontrol-origin: margin; left: 10px; right: 10px;
-    color: {PRIMARY};
+QGroupBox::title {{ subcontrol-origin: margin; left: 12px; right: 12px; top: 2px; }}
+
+/* Knappar: tysta sekundära + fyllda accentknappar */
+QPushButton {{
+    background: white; color: {PRIMARY};
+    border: 1px solid #C7D3E0; border-radius: 8px;
+    padding: 8px 16px; font-weight: 600;
 }}
+QPushButton:hover {{ border-color: {PRIMARY_LIGHT}; background: #F4F8FC; }}
+QPushButton:pressed {{ background: #E9F1F8; }}
+QPushButton:disabled {{ color: #A6B3C2; border-color: #DFE6ED; background: #F6F8FA; }}
+QPushButton#accent {{ background: {ACCENT}; color: {PRIMARY}; border: none; }}
+QPushButton#accent:hover {{ background: #FFB55C; }}
+QPushButton#accent:pressed {{ background: #E8912D; }}
+
+/* Inmatningar */
 QLineEdit, QPlainTextEdit, QTextEdit, QSpinBox, QComboBox {{
-    border: 1px solid #C4CFDA; border-radius: 5px;
-    padding: 4px 6px; background: white;
+    border: 1px solid #C7D3E0; border-radius: 6px;
+    padding: 5px 8px; background: white;
 }}
-QComboBox::drop-down {{ border: none; width: 22px; }}
+QSpinBox:hover, QComboBox:hover {{ border-color: {PRIMARY_LIGHT}; }}
+QSpinBox:focus, QComboBox:focus, QLineEdit:focus, QPlainTextEdit:focus {{
+    border-color: {ACCENT};
+}}
+QComboBox::drop-down {{ border: none; width: 24px; }}
+QComboBox QAbstractItemView {{
+    background: white; border: 1px solid #DCE3EB;
+    selection-background-color: #FDEBD2; selection-color: {PRIMARY};
+    padding: 4px; outline: none;
+}}
+QSpinBox::up-button, QSpinBox::down-button {{ width: 0; border: none; }}
+
+/* Kryssrutor/radioknappar */
+QCheckBox, QRadioButton {{ spacing: 8px; }}
+QCheckBox::indicator, QRadioButton::indicator {{ width: 16px; height: 16px; }}
+QCheckBox::indicator {{ border: 1.5px solid #9FB0C2; border-radius: 4px; background: white; }}
+QRadioButton::indicator {{ border: 1.5px solid #9FB0C2; border-radius: 8px; background: white; }}
+QCheckBox::indicator:hover, QRadioButton::indicator:hover {{ border-color: {PRIMARY_LIGHT}; }}
+QCheckBox::indicator:checked, QRadioButton::indicator:checked {{
+    background: {ACCENT}; border-color: {ACCENT};
+}}
+
+/* Tabell */
 QTableWidget {{
-    gridline-color: #E1E7EE; border: 1px solid #D5DCE4;
-    background: white;
+    gridline-color: #EDF1F5; border: 1px solid #E1E8F0;
+    background: white; border-radius: 6px;
+    alternate-background-color: #F8FAFC;
 }}
 QHeaderView::section {{
-    background: {PRIMARY}; color: white; padding: 6px;
-    border: 0; font-weight: 600;
+    background: #EEF3F8; color: #34506E; padding: 8px;
+    border: 0; border-right: 1px solid #DCE3EB; font-weight: 600;
 }}
-QScrollBar:vertical {{
-    background: #EDF1F5; width: 10px; border-radius: 5px;
-}}
-QScrollBar::handle:vertical {{
-    background: #C4CFDA; border-radius: 5px; min-height: 30px;
-}}
+
+/* Menyer */
+QMenuBar {{ background: white; }}
+QMenuBar::item {{ padding: 6px 12px; border-radius: 6px; }}
+QMenuBar::item:selected {{ background: #EEF3F8; }}
+QMenu {{ background: white; border: 1px solid #DCE3EB; padding: 6px; }}
+QMenu::item {{ padding: 7px 26px; border-radius: 6px; }}
+QMenu::item:selected {{ background: #EEF3F8; color: {PRIMARY}; }}
+QMenu::separator {{ height: 1px; background: #E7EDF3; margin: 5px 8px; }}
+
+/* Scrollbar — smal, modern */
+QScrollBar:vertical {{ background: transparent; width: 8px; margin: 2px; }}
+QScrollBar::handle:vertical {{ background: #B9C6D4; border-radius: 4px; min-height: 32px; }}
 QScrollBar::handle:vertical:hover {{ background: {PRIMARY_LIGHT}; }}
-QStatusBar {{ background: white; border-top: 1px solid #D5DCE4; }}
-QCheckBox, QRadioButton {{ spacing: 7px; }}
-QCheckBox::indicator, QRadioButton::indicator {{ width: 15px; height: 15px; }}
+QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{ height: 0; }}
+QScrollBar:horizontal {{ background: transparent; height: 8px; margin: 2px; }}
+QScrollBar::handle:horizontal {{ background: #B9C6D4; border-radius: 4px; min-width: 32px; }}
+QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal {{ width: 0; }}
+
+QStatusBar {{ background: white; border-top: 1px solid #E1E8F0; color: #6B7A8C; font-size: 8.5pt; }}
+QToolTip {{
+    background: {PRIMARY}; color: white; border: none;
+    padding: 6px 10px; border-radius: 6px; font-size: 9pt;
+}}
 """
 
 
@@ -511,9 +551,7 @@ class MainWindow(QMainWindow):
         self.saved = dict(saved) if saved is not None else (
             SettingsModule.load_settings()
         )
-        self.setWindowTitle(
-            f"Pärmetikett Generator {get_copyright_year()}"
-        )
+        self.setWindowTitle("Pärmetikett Generator")
         if APP_LOGOTYP_ICON.is_file():
             self.setWindowIcon(QIcon(str(APP_LOGOTYP_ICON)))
         self.setMinimumSize(880, 620)
@@ -598,12 +636,12 @@ class MainWindow(QMainWindow):
     # ──────────────────────────────────────────────────────
 
     def _build_menus(self) -> None:
-        """Menybar: Uppdatera (REQ-K4) + Hjälp & Stöd (donationer m.m.)."""
+        """Menybar: Uppdatera + Hjälp & Stöd (donationer m.m.)."""
         menu_bar = self.menuBar()
 
         # ── Uppdatera ────────────────────────────────────
         upd_menu = menu_bar.addMenu("&Uppdatera")
-        act_check = QAction("⬇️ Sök uppdatering nu (REQ-K4)", self)
+        act_check = QAction("⬇️ Sök uppdatering nu", self)
         act_check.triggered.connect(self.check_updates_clicked)
         upd_menu.addAction(act_check)
 
@@ -630,7 +668,7 @@ class MainWindow(QMainWindow):
         help_menu = menu_bar.addMenu("&Hjälp & Stöd")
 
         self.act_autostart = QAction(
-            "🚀 Autostart vid inloggning (utan terminal)", self
+            "🚀 Autostart vid inloggning", self
         )
         self.act_autostart.setCheckable(True)
         self.act_autostart.setChecked(self.autostart_checkbox.isChecked())
@@ -643,7 +681,7 @@ class MainWindow(QMainWindow):
         )
 
         act_shortcut = help_menu.addAction(
-            "📎 Skapa skrivbordsgenväg (utan terminal)"
+            "📎 Skapa skrivbordsgenväg"
         )
         act_shortcut.triggered.connect(self._create_desktop_shortcut)
 
@@ -701,14 +739,14 @@ class MainWindow(QMainWindow):
         support = menu.addMenu("💖 Stöd Pärmetikett Generator…")
         self._fill_support_menu(support)
         menu.addSeparator()
-        check = menu.addAction("⬇️ Sök uppdatering nu (REQ-K4)")
+        check = menu.addAction("⬇️ Sök uppdatering nu")
         check.triggered.connect(self.check_updates_clicked)
         about = menu.addAction("ℹ️ Om Pärmetikett Generator")
         about.triggered.connect(self._show_about)
         menu.exec(self.mapToGlobal(pos))
 
     # ──────────────────────────────────────────────────────
-    # TRAY (#1) — systemfältsikon + minimera + toast
+    # TRAY — systemfältsikon + minimera + toast
     # ──────────────────────────────────────────────────────
 
     def _setup_tray(self) -> None:
@@ -721,7 +759,7 @@ class MainWindow(QMainWindow):
         show_act = menu.addAction("Visa Pärmetikett Generator")
         show_act.triggered.connect(self._show_from_tray)
         menu.addSeparator()
-        upd_act = menu.addAction("⬇️ Sök uppdatering nu (REQ-K4)")
+        upd_act = menu.addAction("⬇️ Sök uppdatering nu")
         upd_act.triggered.connect(self.check_updates_clicked)
         if getattr(self, "act_auto_update", None) is not None:
             menu.addAction(self.act_auto_update)  # samma action = synkad
@@ -935,33 +973,36 @@ class MainWindow(QMainWindow):
         )
         settings_v.addWidget(self.cut_lines_check)
         self.corner_marks_check = QCheckBox(
-            "Förstärkta hörnmarkeringar (#22)"
+            "Förstärkta hörnmarkeringar"
         )
         self.corner_marks_check.setChecked(
             bool(self.saved.get("corner_marks", False))
         )
         settings_v.addWidget(self.corner_marks_check)
-        self.barcode_check = QCheckBox("Streckkod (Code 128) på etiketten (#2)")
+        self.barcode_check = QCheckBox("Streckkod (Code 128) på etiketten")
         self.barcode_check.setChecked(
             bool(self.saved.get("barcode_labels", False))
         )
         settings_v.addWidget(self.barcode_check)
         self.logo_contrast_check = QCheckBox(
-            "Automatisk logotypkontrast (#16)"
+            "Automatisk logotypkontrast"
         )
         self.logo_contrast_check.setChecked(
             bool(self.saved.get("logo_contrast", False))
         )
         settings_v.addWidget(self.logo_contrast_check)
 
-        settings_v.addWidget(QLabel("Antal etiketter:"))
+        antal_row = QHBoxLayout()
+        antal_row.addWidget(QLabel("Antal etiketter:"))
         self.antal_spin = ParmSpinBox()
         self.antal_spin.setRange(1, 50)
         self.antal_spin.setValue(int(self.saved.get("label_count", 1)))
         self.antal_spin.valueChanged.connect(
             lambda _v: self.update_label_fields(True)
         )
-        settings_v.addWidget(self.antal_spin)
+        antal_row.addWidget(self.antal_spin)
+        antal_row.addStretch(1)
+        settings_v.addLayout(antal_row)
 
         create_row = QHBoxLayout()
         create = QPushButton("📄 SKAPA PDF")
@@ -972,13 +1013,13 @@ class MainWindow(QMainWindow):
         print_btn.clicked.connect(lambda: self.create_pdf(print_after=True))
         create_row.addWidget(print_btn)
         settings_v.addLayout(create_row)
-        arkivindex_btn = QPushButton("🗂 Skapa arkivindex (A4, platskoder) (#1)")
+        arkivindex_btn = QPushButton("🗂 Skapa arkivindex (A4)")
         arkivindex_btn.clicked.connect(self.create_arkivindex_pdf)
         settings_v.addWidget(arkivindex_btn)
         export_btn = QPushButton("📤 Öppna Export-mappen")
         export_btn.clicked.connect(self.open_export_folder)
         settings_v.addWidget(export_btn)
-        upd_btn = QPushButton("⬇️ Sök uppdatering (REQ-K4)")
+        upd_btn = QPushButton("⬇️ Sök uppdatering")
         upd_btn.clicked.connect(self.check_updates_clicked)
         settings_v.addWidget(upd_btn)
         self.auto_update_checkbox = QCheckBox(
@@ -992,7 +1033,7 @@ class MainWindow(QMainWindow):
         )
         settings_v.addWidget(self.auto_update_checkbox)
         self.autostart_checkbox = QCheckBox(
-            "🚀 Autostart vid inloggning (utan terminal)"
+            "🚀 Autostart vid inloggning"
         )
         self.autostart_checkbox.setChecked(
             AutostartModule.is_autostart_enabled()
@@ -1002,7 +1043,7 @@ class MainWindow(QMainWindow):
         )
         settings_v.addWidget(self.autostart_checkbox)
         self.tray_checkbox = QCheckBox(
-            "📁 Minimera till systemfältet (tray) vid stängning"
+            "📁 Minimera till systemfältet vid stängning"
         )
         self.tray_checkbox.setChecked(
             bool(self.saved.get("minimize_to_tray", False))
@@ -1010,7 +1051,7 @@ class MainWindow(QMainWindow):
         self.tray_checkbox.toggled.connect(lambda _c: self.save_settings())
         settings_v.addWidget(self.tray_checkbox)
         self.separate_rows_check = QCheckBox(
-            "📄 Skapa även separata PDF:er per rad (utöver den samlade)"
+            "📄 Skapa även en PDF per rad"
         )
         self.separate_rows_check.setChecked(
             bool(self.saved.get("separate_row_pdfs", False))
@@ -1143,6 +1184,7 @@ class MainWindow(QMainWindow):
         self.fel_table.setSelectionBehavior(
             QTableWidget.SelectionBehavior.SelectRows
         )
+        self.fel_table.setAlternatingRowColors(True)
         self.fel_table.verticalHeader().setVisible(False)
         fel_v.addWidget(self.fel_table)
 
@@ -1694,7 +1736,7 @@ class MainWindow(QMainWindow):
             )
 
     # ──────────────────────────────────────────────────────
-    # ARKIVINDEX (#1)
+    # ARKIVINDEX
     # ──────────────────────────────────────────────────────
 
     def create_arkivindex_pdf(self) -> Optional[Path]:
@@ -1924,7 +1966,7 @@ class MainWindow(QMainWindow):
         self._refresh_loggar()
 
     # ──────────────────────────────────────────────────────
-    # UPDATER (REQ-K4) + AUTO-UPPDATERING 00:00
+    # UPDATER + AUTO-UPPDATERING 00:00
     # ──────────────────────────────────────────────────────
 
     def _auto_check_updates(self) -> None:
@@ -2084,6 +2126,8 @@ def main() -> None:
     app = QApplication(sys.argv)
     app.setApplicationName("Pärmetikett Generator")
     app.setStyleSheet(build_qss())
+    if APP_LOGOTYP_ICON.is_file():
+        app.setWindowIcon(QIcon(str(APP_LOGOTYP_ICON)))
     if sys.platform.startswith("win"):
         app.setFont(QFont("Segoe UI", 10))
     window = MainWindow(saved)
