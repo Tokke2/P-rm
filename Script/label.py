@@ -490,6 +490,37 @@ def _draw_corner_marks(canvas: Canvas, width: float, height: float) -> None:
     canvas.restoreState()
 
 
+# Fyll-läge (v1.10.0, användarönskemål): texten fyller alltid etiketten
+# med 5 px marginal från kanterna och delas ALDRIG upp på flera rader.
+FILL_TEXT_MARGIN_PT = 5.0     # "5px från kanterna" (pt ≈ px vid 72 dpi)
+FILL_MAX_FONT_PT = 400.0      # vettig övre gräns för fyll-läget
+
+
+def _fit_single_line(
+    canvas: Canvas,
+    text_content: str,
+    font_name: str,
+    avail_width: float,
+    avail_height: float,
+    line_spacing: float = 1.0,
+) -> float:
+    """Fontstorlek så att EN rad fyller utrymmet (aldrig radbruten).
+
+    Bredd (5 px-marginalen inräknad av anroparen) och höjd bestämmer
+    minsta: ``size = min(avail_width / bredd_vid_1pt, avail_height /
+    line_spacing)``. stringWidth skalar linjärt med storleken.
+    """
+    text_content = (text_content or "").strip()
+    if not text_content or avail_width <= 0 or avail_height <= 0:
+        return 1.0
+    width_at_1 = canvas.stringWidth(text_content, font_name, 1.0)
+    if width_at_1 <= 0.0:
+        return 1.0
+    by_width = avail_width / width_at_1
+    by_height = avail_height / max(0.01, line_spacing)
+    return max(1.0, min(by_width, by_height, FILL_MAX_FONT_PT))
+
+
 def draw_single_label(
     canvas: Canvas,
     x_pos: float,
@@ -505,13 +536,13 @@ def draw_single_label(
     barcode_text: Optional[str] = None,
     corner_marks: bool = False,
     logo_contrast: bool = False,
+    fill_text: bool = False,
 ) -> None:
     """Ritar en etikett med ram, valfri logotyp och autoanpassad text.
 
-    Nytt i v1.1.0:
-    * `barcode_text` — Code 128-B streckkod i etikettens underkant (#2).
-    * `corner_marks` — förstärkta hörnmarkeringar för exakt trimning (#22).
-    * `logo_contrast` — vit baksida bakom mörka logotyper (#16).
+    `fill_text=True` (v1.10.0): texten är alltid EN rad som fyller
+    utrymmet med 5 px marginal från kanterna (FILL_TEXT_MARGIN_PT) —
+    den krympas/växer tills den fyller, men delas aldrig upp.
     """
     if width <= 0 or height <= 0:
         return
@@ -537,11 +568,14 @@ def draw_single_label(
         max(initial_font_size, settings.min_font_size), settings.max_font_size
     )
     initial_lines: List[str] = []
-    if has_text:
+    if has_text and not fill_text:
+        # Fyll-läget (fill_text) bryter ALDRIG rader — hoppar över helt.
         canvas.setFont(font_name, font_size)
         initial_lines = _break_text_into_lines(
             text_content, canvas, font_name, font_size, max_text_width
         )
+    # Antal textrader (fyll-läget = alltid exakt 1 rad).
+    text_line_count = len(initial_lines) or (1 if has_text else 0)
 
     # Streckkod i underkanten (#2) — reserverar ett band nedtill.
     barcode_band = 0.0
@@ -557,7 +591,7 @@ def draw_single_label(
     if prepared_logo_image:
         logo_w, logo_h = _calculate_optimal_logo_size(
             prepared_logo_image, width, height,
-            len(initial_lines), font_size, settings,
+            text_line_count, font_size, settings,
         )
         if logo_w > 0 and logo_h > 0:
             try:
@@ -607,27 +641,38 @@ def draw_single_label(
     if barcode_band:
         y_text_bottom += barcode_band + BARCODE_TEXT_GAP
     avail_height = max(0.0, y_text_top - y_text_bottom)
-    lines = initial_lines
 
-    # Krymp texten tills den får plats (både höjd och bredd).
-    while auto_shrink_text and font_size > settings.min_font_size:
-        total_height = font_size * settings.line_spacing * len(lines)
-        widest = max(
-            (canvas.stringWidth(line, font_name, font_size) for line in lines),
-            default=0.0,
+    if fill_text:
+        # Fyll-läge (v1.10.0): EN rad som fyller utrymmet med 5 px
+        # marginal från kanterna — texten delas ALDRIG upp.
+        lines = [text_content]
+        font_size = _fit_single_line(
+            canvas, text_content, font_name,
+            width - 2 * FILL_TEXT_MARGIN_PT, avail_height,
+            settings.line_spacing,
         )
-        if total_height <= avail_height and widest <= max_text_width:
-            break
-        font_size -= 0.5
         canvas.setFont(font_name, font_size)
-        candidate = _break_text_into_lines(
-            text_content, canvas, font_name, font_size, max_text_width
-        )
-        if candidate:
-            lines = candidate
+    else:
+        lines = initial_lines
+        # Krymp texten tills den får plats (både höjd och bredd).
+        while auto_shrink_text and font_size > settings.min_font_size:
+            total_height = font_size * settings.line_spacing * len(lines)
+            widest = max(
+                (canvas.stringWidth(line, font_name, font_size) for line in lines),
+                default=0.0,
+            )
+            if total_height <= avail_height and widest <= max_text_width:
+                break
+            font_size -= 0.5
+            canvas.setFont(font_name, font_size)
+            candidate = _break_text_into_lines(
+                text_content, canvas, font_name, font_size, max_text_width
+            )
+            if candidate:
+                lines = candidate
 
-    font_size = max(font_size, settings.min_font_size)
-    canvas.setFont(font_name, font_size)
+        font_size = max(font_size, settings.min_font_size)
+        canvas.setFont(font_name, font_size)
     line_height = font_size * settings.line_spacing
     total_text_height = line_height * len(lines)
     if total_text_height <= avail_height:

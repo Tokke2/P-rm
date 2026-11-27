@@ -5,10 +5,30 @@
 <!--
 ═══════════════════════════════════════════════════════════════════════════════
   © Copyright Rickard Längkvist {get_copyright_year()} - All rights reserved
-  Specifikation v7.6 — Sammanslagen & uppdaterad
-  Senast uppdaterad: 2026-11-25
+  Specifikation v7.7 — Sammanslagen & uppdaterad
+  Senast uppdaterad: 2026-11-27
   Status: AKTIV UTVECKLING
 <!--
+  v7.7 — ÄNDRINGAR (2026-11-27, v1.10.0 — tjock-rygg + inställningsflik + fill)
+  ───────────────────────────────────────────────────────────────
+  · STANDARD: label_type = "rygg_tjock" i DEFAULT_SETTINGS + alla
+    fallbacks i folder.py (_label_type_value, __init__). Sparade värden
+    vinner fortfarande.
+  · NY FLIK "Inställningar" (_build_settings_tab): korten "Etiketter &
+    utskrift" (multi, cut_lines, corner, barcode, contrast, antal) och
+    "App & system" (auto-upd + sök-knapp, autostart, tray, PDF per rad,
+    info om fill-läget). Tabordning: Generator|Inställningar|Hjälp|Loggar.
+    Vänsterpanelen: Etikettyp + Logotyp + SKAPA/Skriv ut + arkivindex +
+    export + Verifikat. text_size_spin + auto_shrink_check BORTTAGNA ur
+    GUI + current_settings (DEFAULT-nycklarna finns kvar — kompatibilitet).
+  · FILL-LÄGE (användarönskemål "texten ska alltid anpassas … 5px från
+    kanterna, dela aldrig upp texten"): label.py FILL_TEXT_MARGIN_PT=5.0
+    + FILL_MAX_FONT_PT=400 + _fit_single_line (linjär stringWidth-skalning:
+    size = min(avail_w/bredd_vid_1pt, avail_h/line_spacing, cap));
+    draw_single_label(fill_text=True) → lines=[text], aldrig radbrytning
+    (initial_lines hoppas över), gäller rygg+index+verifikat (3 anrop).
+  · Tester: 11 nya (test_fill_lage.py) — 161 totalt.
+-->
   v7.6 — ÄNDRINGAR (2026-11-25, v1.9.0 — design: modern/enklare/proffsig)
   ───────────────────────────────────────────────────────────────
   · build_qss() SKRIVEN OM: kort-look (QGroupBox radius 10 + mjuk kant),

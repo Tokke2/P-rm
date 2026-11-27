@@ -6,6 +6,28 @@ PDF-etiketter för pärmar och arkivering: ryggetiketter (41×64 mm /
 
 ## Nya förbättringar
 
+### v1.10.0 — Tjock rygg som standard + Inställningar-flik + text fyller alltid etiketten
+
+* **Tjock rygg är standard** (57×64 mm) — Smal/Index väljs som vanligt;
+  ändras bara för nya installationer (din sparade inställning vinner).
+* **Ny Inställningar-flik** (Generator | **Inställningar** | Hjälp | Loggar)
+  — här ställs allt in, i två kort: **Etiketter & utskrift** (Flera
+  etiketter, Klipplinjer, Hörnmarkeringar, Streckkod, Logotypkontrast,
+  Antal) och **App & system** (Auto-uppdatering 00:00 + Sök uppdatering,
+  Autostart, Tray vid stängning, PDF per rad). Vänsterpanelen i Generator
+  är nu ren: bara Etikettyp, Logotyp och åtgärder.
+* **Texten fyller alltid etiketten (5 px marginal) — delas aldrig upp**:
+  * Nytt fyll-läge i etikettritningen: texten är alltid **EN rad** som
+    automatiskt **växer eller krymper** tills den fyller etiketten med
+    **5 px marginal** från kanterna (bredd + höjd beaktas; logotypens
+    utrymme respekteras)
+  * Radbrytningen är helt avstängd i fyll-läget — långa texter krymper i
+    stället (vakttest anropar aldrig radbrytaren)
+  * "Textstorlek" + "Autoanpassa text"-kryssrutan är borttagna (verkar
+    alltid) — gamla settings-nycklar sparas oförändrade för kompatibilitet
+  * Gäller rygg-etiketter, index-etiketter och verifikatetiketter
+* Tester: 11 nya (fill-matematik 6 + flik/standard 5) — **161 st totalt**
+
 ### v1.9.0 — ny design: snyggare, enklare, proffsigare, modernare
 
 * **Modern QSS design-system** (brandfärgerna bevarade: djupblå + orange):

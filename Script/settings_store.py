@@ -18,7 +18,7 @@ except ImportError:  # kör filen direkt ur Script-mappen
 SETTINGS_PATH = Path(__file__).resolve().parent.parent / "settings.json"
 
 DEFAULT_SETTINGS: Dict[str, Any] = {
-    "label_type": "rygg_smal",
+    "label_type": "rygg_tjock",
     "text_size": 16,
     "auto_shrink": True,
     "multi_label": False,

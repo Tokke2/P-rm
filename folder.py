@@ -206,6 +206,14 @@ _I18N: dict = {
     # Tray
     "Visa Pärmetikett Generator": "Show Pärmetikett Generator",
     "Avsluta": "Quit",
+    # Inställningar-fliken (v1.10.0)
+    "Etiketter & utskrift": "Labels & printing",
+    "App & system": "App & system",
+    "Texten anpassas alltid automatiskt: den fyller etiketten "
+    "med 5 px marginal från kanterna och delas aldrig upp på "
+    "flera rader.":
+        "Text is always auto-fitted: it fills the label with a 5 px "
+        "margin from the edges and is never split across lines.",
 }
 _I18N_REVERSE: dict = {value: key for key, value in _I18N.items()}
 
@@ -557,9 +565,9 @@ class MainWindow(QMainWindow):
         self.setMinimumSize(880, 620)
 
         # ── Lästa inställningar → widgetvärden sätts i panelerna ──
-        self._label_type = self.saved.get("label_type", "rygg_smal")
+        self._label_type = self.saved.get("label_type", "rygg_tjock")
         if self._label_type not in VALID_LABEL_TYPES:
-            self._label_type = "rygg_smal"
+            self._label_type = "rygg_tjock"
         self.logo_path: Optional[str] = self.saved.get("last_logo_path") or None
         self.prepared_logo = None
         self.logo_kind = ""
@@ -580,14 +588,17 @@ class MainWindow(QMainWindow):
         self.tabs = QTabWidget()
         self.setCentralWidget(self.tabs)
         self.generator_tab = QWidget()
+        self.settings_tab = QWidget()
         self.help_tab = QWidget()
         self.logg_tab = QWidget()
         self.tabs.addTab(self.generator_tab, "Generator")
+        self.tabs.addTab(self.settings_tab, "Inställningar")
         self.tabs.addTab(self.help_tab, "Hjälp")
         self.tabs.addTab(self.logg_tab, "Loggar")
         self.tabs.currentChanged.connect(self._on_tab_changed)
 
         self._build_generator_tab()
+        self._build_settings_tab()
         self._build_help_tab()
         self._build_logg_tab()
         self._build_menus()
@@ -944,66 +955,7 @@ class MainWindow(QMainWindow):
         self._refresh_logo_label()
 
         # Inställningar
-        settings_box = QGroupBox("Inställningar")
-        settings_v = QVBoxLayout(settings_box)
-        settings_v.addWidget(QLabel("Textstorlek:"))
-        size_row = QHBoxLayout()
-        self.text_size_spin = ParmSpinBox()
-        self.text_size_spin.setRange(8, 32)
-        self.text_size_spin.setValue(
-            int(self.saved.get("text_size", 16))
-        )
-        size_row.addWidget(self.text_size_spin)
-        size_row.addStretch(1)
-        settings_v.addLayout(size_row)
-
-        self.auto_shrink_check = QCheckBox("Autoanpassa text")
-        self.auto_shrink_check.setChecked(
-            bool(self.saved.get("auto_shrink", True))
-        )
-        settings_v.addWidget(self.auto_shrink_check)
-        self.multi_label_check = QCheckBox("Flera etiketter")
-        self.multi_label_check.setChecked(
-            bool(self.saved.get("multi_label", False))
-        )
-        settings_v.addWidget(self.multi_label_check)
-        self.cut_lines_check = QCheckBox("Klipplinjer (kant till kant)")
-        self.cut_lines_check.setChecked(
-            bool(self.saved.get("cut_lines", True))
-        )
-        settings_v.addWidget(self.cut_lines_check)
-        self.corner_marks_check = QCheckBox(
-            "Förstärkta hörnmarkeringar"
-        )
-        self.corner_marks_check.setChecked(
-            bool(self.saved.get("corner_marks", False))
-        )
-        settings_v.addWidget(self.corner_marks_check)
-        self.barcode_check = QCheckBox("Streckkod (Code 128) på etiketten")
-        self.barcode_check.setChecked(
-            bool(self.saved.get("barcode_labels", False))
-        )
-        settings_v.addWidget(self.barcode_check)
-        self.logo_contrast_check = QCheckBox(
-            "Automatisk logotypkontrast"
-        )
-        self.logo_contrast_check.setChecked(
-            bool(self.saved.get("logo_contrast", False))
-        )
-        settings_v.addWidget(self.logo_contrast_check)
-
-        antal_row = QHBoxLayout()
-        antal_row.addWidget(QLabel("Antal etiketter:"))
-        self.antal_spin = ParmSpinBox()
-        self.antal_spin.setRange(1, 50)
-        self.antal_spin.setValue(int(self.saved.get("label_count", 1)))
-        self.antal_spin.valueChanged.connect(
-            lambda _v: self.update_label_fields(True)
-        )
-        antal_row.addWidget(self.antal_spin)
-        antal_row.addStretch(1)
-        settings_v.addLayout(antal_row)
-
+        # Åtgärder — övriga inställningar har egen flik (v1.10.0)
         create_row = QHBoxLayout()
         create = QPushButton("📄 SKAPA PDF")
         create.setObjectName("accent")
@@ -1012,55 +964,13 @@ class MainWindow(QMainWindow):
         print_btn = QPushButton("🖨 Skriv ut direkt")
         print_btn.clicked.connect(lambda: self.create_pdf(print_after=True))
         create_row.addWidget(print_btn)
-        settings_v.addLayout(create_row)
+        left_v.addLayout(create_row)
         arkivindex_btn = QPushButton("🗂 Skapa arkivindex (A4)")
         arkivindex_btn.clicked.connect(self.create_arkivindex_pdf)
-        settings_v.addWidget(arkivindex_btn)
+        left_v.addWidget(arkivindex_btn)
         export_btn = QPushButton("📤 Öppna Export-mappen")
         export_btn.clicked.connect(self.open_export_folder)
-        settings_v.addWidget(export_btn)
-        upd_btn = QPushButton("⬇️ Sök uppdatering")
-        upd_btn.clicked.connect(self.check_updates_clicked)
-        settings_v.addWidget(upd_btn)
-        self.auto_update_checkbox = QCheckBox(
-            "🕒 Auto-uppdatering 00:00 varje dag"
-        )
-        self.auto_update_checkbox.setChecked(
-            bool(self.saved.get("auto_update_daily", True))
-        )
-        self.auto_update_checkbox.toggled.connect(
-            self._on_auto_update_toggled
-        )
-        settings_v.addWidget(self.auto_update_checkbox)
-        self.autostart_checkbox = QCheckBox(
-            "🚀 Autostart vid inloggning"
-        )
-        self.autostart_checkbox.setChecked(
-            AutostartModule.is_autostart_enabled()
-        )
-        self.autostart_checkbox.toggled.connect(
-            self._on_autostart_toggled
-        )
-        settings_v.addWidget(self.autostart_checkbox)
-        self.tray_checkbox = QCheckBox(
-            "📁 Minimera till systemfältet vid stängning"
-        )
-        self.tray_checkbox.setChecked(
-            bool(self.saved.get("minimize_to_tray", False))
-        )
-        self.tray_checkbox.toggled.connect(lambda _c: self.save_settings())
-        settings_v.addWidget(self.tray_checkbox)
-        self.separate_rows_check = QCheckBox(
-            "📄 Skapa även en PDF per rad"
-        )
-        self.separate_rows_check.setChecked(
-            bool(self.saved.get("separate_row_pdfs", False))
-        )
-        self.separate_rows_check.toggled.connect(
-            lambda _c: self.save_settings()
-        )
-        settings_v.addWidget(self.separate_rows_check)
-        left_v.addWidget(settings_box)
+        left_v.addWidget(export_btn)
 
         # Verifikat
         verifikat_box = QGroupBox("Verifikat (hela året)")
@@ -1150,6 +1060,116 @@ class MainWindow(QMainWindow):
         self.update_label_fields(False)
 
     # ──────────────────────────────────────────────────────
+    # INSTÄLLNINGAR-FLIK — här ställs allt in (v1.10.0)
+    # ──────────────────────────────────────────────────────
+
+    def _build_settings_tab(self) -> None:
+        layout = QVBoxLayout(self.settings_tab)
+        layout.setContentsMargins(10, 10, 10, 10)
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QFrame.NoFrame)
+        inner = QWidget()
+        inner_v = QVBoxLayout(inner)
+        inner_v.setSpacing(8)
+
+        etikett_box = QGroupBox("Etiketter & utskrift")
+        etikett_v = QVBoxLayout(etikett_box)
+        self.multi_label_check = QCheckBox("Flera etiketter")
+        self.multi_label_check.setChecked(
+            bool(self.saved.get("multi_label", False))
+        )
+        etikett_v.addWidget(self.multi_label_check)
+        self.cut_lines_check = QCheckBox("Klipplinjer (kant till kant)")
+        self.cut_lines_check.setChecked(
+            bool(self.saved.get("cut_lines", True))
+        )
+        etikett_v.addWidget(self.cut_lines_check)
+        self.corner_marks_check = QCheckBox("Förstärkta hörnmarkeringar")
+        self.corner_marks_check.setChecked(
+            bool(self.saved.get("corner_marks", False))
+        )
+        etikett_v.addWidget(self.corner_marks_check)
+        self.barcode_check = QCheckBox("Streckkod (Code 128) på etiketten")
+        self.barcode_check.setChecked(
+            bool(self.saved.get("barcode_labels", False))
+        )
+        etikett_v.addWidget(self.barcode_check)
+        self.logo_contrast_check = QCheckBox("Automatisk logotypkontrast")
+        self.logo_contrast_check.setChecked(
+            bool(self.saved.get("logo_contrast", False))
+        )
+        etikett_v.addWidget(self.logo_contrast_check)
+        antal_row = QHBoxLayout()
+        antal_row.addWidget(QLabel("Antal etiketter:"))
+        self.antal_spin = ParmSpinBox()
+        self.antal_spin.setRange(1, 50)
+        self.antal_spin.setValue(int(self.saved.get("label_count", 1)))
+        self.antal_spin.valueChanged.connect(
+            lambda _v: self.update_label_fields(True)
+        )
+        antal_row.addWidget(self.antal_spin)
+        antal_row.addStretch(1)
+        etikett_v.addLayout(antal_row)
+        inner_v.addWidget(etikett_box)
+
+        app_box = QGroupBox("App & system")
+        app_v = QVBoxLayout(app_box)
+        upd_row = QHBoxLayout()
+        self.auto_update_checkbox = QCheckBox(
+            "🕒 Auto-uppdatering 00:00 varje dag"
+        )
+        self.auto_update_checkbox.setChecked(
+            bool(self.saved.get("auto_update_daily", True))
+        )
+        self.auto_update_checkbox.toggled.connect(
+            self._on_auto_update_toggled
+        )
+        upd_row.addWidget(self.auto_update_checkbox)
+        upd_btn = QPushButton("⬇️ Sök uppdatering")
+        upd_btn.clicked.connect(self.check_updates_clicked)
+        upd_row.addWidget(upd_btn)
+        app_v.addLayout(upd_row)
+        self.autostart_checkbox = QCheckBox("🚀 Autostart vid inloggning")
+        self.autostart_checkbox.setChecked(
+            AutostartModule.is_autostart_enabled()
+        )
+        self.autostart_checkbox.toggled.connect(
+            self._on_autostart_toggled
+        )
+        app_v.addWidget(self.autostart_checkbox)
+        self.tray_checkbox = QCheckBox(
+            "📁 Minimera till systemfältet vid stängning"
+        )
+        self.tray_checkbox.setChecked(
+            bool(self.saved.get("minimize_to_tray", False))
+        )
+        self.tray_checkbox.toggled.connect(lambda _c: self.save_settings())
+        app_v.addWidget(self.tray_checkbox)
+        self.separate_rows_check = QCheckBox(
+            "📄 Skapa även en PDF per rad"
+        )
+        self.separate_rows_check.setChecked(
+            bool(self.saved.get("separate_row_pdfs", False))
+        )
+        self.separate_rows_check.toggled.connect(
+            lambda _c: self.save_settings()
+        )
+        app_v.addWidget(self.separate_rows_check)
+        info = QLabel(
+            "Texten anpassas alltid automatiskt: den fyller etiketten "
+            "med 5 px marginal från kanterna och delas aldrig upp på "
+            "flera rader."
+        )
+        info.setObjectName("muted")
+        info.setWordWrap(True)
+        app_v.addWidget(info)
+        inner_v.addWidget(app_box)
+        inner_v.addStretch(1)
+        scroll.setWidget(inner)
+        layout.addWidget(scroll)
+
+    # ──────────────────────────────────────────────────────
     # HJÄLP-FLIK (samma text som tkinter-versionen)
     # ──────────────────────────────────────────────────────
 
@@ -1219,7 +1239,7 @@ class MainWindow(QMainWindow):
         for value, radio in self.type_buttons.items():
             if radio.isChecked():
                 return value
-        return "rygg_smal"
+        return "rygg_tjock"
 
     def update_label_fields(self, preserve: bool = False) -> None:
         """Skapar/uppdaterar textfälten (med checkruta per rad)."""
@@ -1293,8 +1313,6 @@ class MainWindow(QMainWindow):
         settings = dict(self.saved)
         settings.update({
             "label_type": self._label_type_value(),
-            "text_size": self.text_size_spin.value(),
-            "auto_shrink": self.auto_shrink_check.isChecked(),
             "multi_label": self.multi_label_check.isChecked(),
             "cut_lines": self.cut_lines_check.isChecked(),
             "logo_top_px": self.logo_top_spin.value(),
@@ -1684,8 +1702,7 @@ class MainWindow(QMainWindow):
                 c, x, y, width, height, text,
                 prepared_logo_image=self.prepared_logo,
                 base_font_name=font_name,
-                initial_font_size=self.text_size_spin.value(),
-                auto_shrink_text=self.auto_shrink_check.isChecked(),
+                fill_text=True,
                 barcode_text=(
                     self._barcode_text_for(text)
                     if self.barcode_check.isChecked() else None
@@ -1730,8 +1747,7 @@ class MainWindow(QMainWindow):
                 display_text,
                 prepared_logo_image=None,
                 base_font_name=font_name,
-                initial_font_size=12,
-                auto_shrink_text=True,
+                fill_text=True,
                 corner_marks=self.corner_marks_check.isChecked(),
             )
 
@@ -1902,8 +1918,7 @@ class MainWindow(QMainWindow):
                 pdf, x, y, label_width, label_height, text,
                 prepared_logo_image=self.prepared_logo,
                 base_font_name=font_name,
-                initial_font_size=self.text_size_spin.value(),
-                auto_shrink_text=self.auto_shrink_check.isChecked(),
+                fill_text=True,
                 barcode_text=(
                     self._barcode_text_for(text) if use_barcode else None
                 ),
