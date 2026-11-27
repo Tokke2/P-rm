@@ -5,10 +5,23 @@
 <!--
 ═══════════════════════════════════════════════════════════════════════════════
   © Copyright Rickard Längkvist {get_copyright_year()} - All rights reserved
-  Specifikation v7.1 — Sammanslagen & uppdaterad
+  Specifikation v7.2 — Sammanslagen & uppdaterad
   Senast uppdaterad: 2026-11-25
   Status: AKTIV UTVECKLING
 <!--
+  v7.2 — ÄNDRINGAR (2026-11-25, v1.7.3 — P0: QUrl från fel Qt-modul)
+  ───────────────────────────────────────────────────────────────
+  · RAPPORTERAD KRASCH: ImportError: cannot import name 'QUrl' from
+    'PySide6.QtGui' — QUrl bor i CORE (QtCore), QDesktopServices i QtGui.
+  · Fix: QtCore(QUrl, QTimer, Qt) + QtGui(QAction, QDesktopServices,
+    QFont, QIcon).
+  · NY VAKT: test_qt_names_in_correct_modules — validerar varje
+    PySide6-import mot PySide6:s .pyi-stubbar (officiell sanningskälla,
+    textfiler → körs i sandbox utan libGL). Negativt verifierad.
+  · Lärdom (P0-mönster #4): Qt-namnens modulplacering kan validera
+    STATISKT via stubbar — ingen riktig Qt-import behövs.
+  · Tester: 123 totalt.
+-->
   v7.1 — ÄNDRINGAR (2026-11-25, v1.7.2 — P0: NameError QAction i menyer)
   ───────────────────────────────────────────────────────────────
   · RAPPORTERAD KRASCH: NameError: name 'QAction' is not defined

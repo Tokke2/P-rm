@@ -36,10 +36,8 @@ from Script import skarm as SkarmModule
 SkarmModule.ensure_no_console_streams()
 
 try:
-    from PySide6.QtCore import QTimer, Qt
-    from PySide6.QtGui import (
-        QAction, QDesktopServices, QFont, QIcon, QUrl,
-    )
+    from PySide6.QtCore import QTimer, QUrl, Qt
+    from PySide6.QtGui import QAction, QDesktopServices, QFont, QIcon
     from PySide6.QtWidgets import (
         QApplication, QCheckBox, QComboBox, QFileDialog, QFrame,
         QGridLayout, QGroupBox, QHBoxLayout, QHeaderView, QLabel,

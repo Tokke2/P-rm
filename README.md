@@ -6,6 +6,18 @@ PDF-etiketter för pärmar och arkivering: ryggetiketter (41×64 mm /
 
 ## Nya förbättringar
 
+### v1.7.3 — P0-buggfix: QUrl importerad från fel Qt-modul
+
+* **Kraschfix**: `QUrl` bor i **QtCore** (inte QtGui) — `cannot import
+  name 'QUrl' from 'PySide6.QtGui'` på Windows. Importen flyttad:
+  `QtCore(QUrl, QTimer, Qt)` + `QtGui(QAction, QDesktopServices, QFont, QIcon)`.
+* **Ny vakt mot fel modulplacering**: testet validerar VARJE PySide6-
+  import i folder.py mot **PySide6:s .pyi-stubbar** (den officiella
+  modulplaceringen — textfiler, fungerar även där grafikbiblioteket
+  saknas). Negativt verifierad: hittar fel som denna.
+* Tester: 123 st totalt.
+* Uppdatera en installation som inte startar: `python Script/updater.py`
+
 ### v1.7.2 — P0-buggfix: NameError QAction vid menybygget (v1.7.0-regression)
 
 * **Kraschfix**: menyerna kallade `QAction`/`QMenu`/`QDesktopServices`/

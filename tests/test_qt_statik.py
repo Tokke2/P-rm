@@ -9,6 +9,7 @@ riktiga offscreen-Qt-tester.
 from __future__ import annotations
 
 import ast
+import re
 import unittest
 from pathlib import Path
 
@@ -251,6 +252,42 @@ class QtImportTackningTests(unittest.TestCase):
             problems, [],
             "pyflakes hittade undefined names (NameError i kö)",
         )
+
+
+    def test_qt_names_in_correct_modules(self) -> None:
+        """P0-regression v1.7.3: Qt-namn måste importeras från RÄTT modul
+        (QUrl bor i QtCore, inte QtGui — ImportError på Windows).
+
+        Sanningskälla = PySide6:s .pyi-stubbar (textfiler — validerar
+        även där libGL saknar riktig GUI-import). Skippar om stubbar
+        saknas i miljön.
+        """
+        try:
+            import PySide6
+        except ImportError:
+            self.skipTest("PySide6 saknas i miljön")
+        stub_root = Path(PySide6.__file__).resolve().parent
+        stubs = {}
+        for mod in ("QtCore", "QtGui", "QtWidgets"):
+            stub_path = stub_root / f"{mod}.pyi"
+            if not stub_path.is_file():
+                self.skipTest("PySide6-stubbar saknas")
+                return
+            stubs[mod] = set(re.findall(
+                r"^(?:class|def) (\w+)",
+                stub_path.read_text(encoding="utf-8", errors="ignore"),
+                re.MULTILINE,
+            ))
+        for node in ast.walk(TREE):
+            if (isinstance(node, ast.ImportFrom) and node.module
+                    and node.module.startswith("PySide6.")):
+                mod = node.module.split(".")[1]
+                for alias in node.names:
+                    self.assertIn(
+                        alias.name, stubs.get(mod, set()),
+                        f"{alias.name} finns INTE i PySide6.{mod} "
+                        "(fel modul → ImportError på Windows)",
+                    )
 
 
 if __name__ == "__main__":
