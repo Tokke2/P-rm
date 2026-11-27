@@ -18,8 +18,14 @@ appens teknik (se §12).
   arena-branchen — och den är samtidigt **standardbranch** som består
   **även efter byte av chatt**. En ny chatt fortsätter alltid på samma
   arbetsbranch; skapa aldrig en ny om en aktiv finns. Alla gamla
-  session-brancher tas bort (det är gjort — `arena/813a1786-p-rm`
-  raderad 2026-11-25).
+  session-brancher tas bort.
+* **Branch-överlämning (2026-11-25):** plattformen skapade
+  `arena/684c29e9-p-rm` som ny arbetsbranch, baserad exakt på
+  `arena/5b52c0a6-p-rm` (b4a7882). Den gamla branchen är raderad lokalt;
+  fjärr-radering blockeras av GitHub så länge den är default-branch
+  (kräver admin-rättighet). Den är **frusen — läs/committa/pusha aldrig
+  dit**. Gäller tills admin-rättighet byter default-branch, varefter
+  `arena/5b52c0a6-p-rm` (och `main`) raderas helt.
 * `main` står kvar som GitHub:s default-branch endast för att sandboxens
   token saknar admin-rättighet att byta/radera den. `main` är **förbjudet
   område**: aldrig committa, pusha eller merga emot den, och den ska
