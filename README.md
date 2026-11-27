@@ -6,6 +6,20 @@ PDF-etiketter för pärmar och arkivering: ryggetiketter (41×64 mm /
 
 ## Nya förbättringar
 
+### v1.7.1 — P0-buggfix: autostart kraschade appstarten på Windows
+
+* **Kraschfix (winreg-API)**: autostart kallade `key.QueryValueEx(...)` —
+  men `winreg.PyHKEY`-objektet har bara `Close`/`Detach`;
+  `SetValueEx`/`QueryValueEx`/`DeleteValue` finns på **modulnivå** med
+  nyckeln som första argument. Kraschen inträffade vid appstart när
+  autostart-checkboxen initierades (v1.7.0-regression).
+* **Försvarslag**: alla winreg-anrop är nu insvepta så att en udda
+  registery-implementation aldrig kan krascha appstarten — autostart
+  blir bara no-op med fellogg.
+* Permanent regressionstest med exakt riktig winreg-API-simulering
+  (3 nya tester) — 119 st totalt.
+* Uppdatera en installation som inte startar: `python Script/updater.py`
+
 ### v1.7.0 — menyer (Uppdatera + Hjälp & Stöd) + stöd-meny à la TaskBord
 
 * **Ny menybar**:

@@ -18,10 +18,11 @@ from Script import autostart, skarm  # noqa: E402
 
 
 class _FakeKey:
-    """Låter kontexthanteraren fungera som en riktig registreringsnyckel."""
+    """PyHKEY-liknande: bara kontexthantering (Close/Detach-liknande).
 
-    def __init__(self, store: dict) -> None:
-        self.store = store
+    VIKTIGT: det RIKTIGA winreg.PyHKEY-objektet har INTE SetValueEx/
+    QueryValueEx/DeleteValue — de finns på modulnivå. Faken speglar det.
+    """
 
     def __enter__(self):
         return self
@@ -29,22 +30,9 @@ class _FakeKey:
     def __exit__(self, *args) -> None:
         return None
 
-    def SetValueEx(self, value_name, _reserved, _type, value) -> None:
-        self.store[value_name] = value
-
-    def QueryValueEx(self, key_name):
-        if key_name not in self.store:
-            raise FileNotFoundError(key_name)
-        return self.store[key_name], None
-
-    def DeleteValue(self, key_name) -> None:
-        if key_name not in self.store:
-            raise FileNotFoundError(key_name)
-        del self.store[key_name]
-
 
 class _FakeWinreg(SimpleNamespace):
-    """Minimal fake av winreg-API:t som autostart-modulen använder."""
+    """Fake av winreg-MODULEN (modulnivå-funktioner med nyckel först)."""
 
     HKEY_CURRENT_USER = "HKCU"
     KEY_SET_VALUE = "write"
@@ -52,10 +40,24 @@ class _FakeWinreg(SimpleNamespace):
     REG_SZ = "str"
 
     def __init__(self) -> None:
-        super().__init__(store={})
+        super().__init__(store={}, _open=False)
 
     def OpenKey(self, _root, _path, _reserved, access):
-        return _FakeKey(self.store)
+        self._open = True
+        return _FakeKey()
+
+    def SetValueEx(self, _key, value_name, _reserved, _type, value) -> None:
+        self.store[value_name] = value
+
+    def QueryValueEx(self, _key, value_name):
+        if value_name not in self.store:
+            raise FileNotFoundError(value_name)
+        return self.store[value_name], None
+
+    def DeleteValue(self, _key, value_name) -> None:
+        if value_name not in self.store:
+            raise FileNotFoundError(value_name)
+        del self.store[value_name]
 
 
 class AutostartTests(unittest.TestCase):
@@ -159,6 +161,96 @@ class FolderPyBootstrapTests(unittest.TestCase):
             python_exe="C:\\Py\\python.exe", script_path=None
         )
         self.assertIn("folder.py", command)
+
+
+class WinregApiRegressionTests(unittest.TestCase):
+    """P0-regression v1.7.1: riktigt winreg-API — PyHKEY-objektet har bara
+    Close/Detach; värdefunktionerna (SetValueEx/QueryValueEx/DeleteValue)
+    finns på MODULE-nivå med nyckeln som första argument.
+
+    v1.7.0 kraschade på Windows: autostart kallade key.QueryValueEx(...)
+    → AttributeError i GUI-starten. Dessa tester simulerar det RIKTIGA
+    winreg-API:t och ett udda API (försvarslag: no-op, aldrig crash).
+    """
+
+    def _riktig_winreg_lik(self):
+        """Fake som speglar riktigt winreg: modulnivå + PyHKEY utan metoder."""
+
+        class PyHKEYLiknande:  # exakt som riktigt winreg.PyHKEY
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *args):
+                return None
+
+            def Close(self):
+                pass
+
+            def Detach(self):
+                return 1
+
+        fake = SimpleNamespace(
+            HKEY_CURRENT_USER="HKCU", KEY_SET_VALUE="w",
+            KEY_READ="r", REG_SZ="str", store={},
+        )
+
+        def open_key(_root, _path, _reserved, _access):
+            return PyHKEYLiknande()
+
+        def set_value_ex(_key, value_name, _reserved, _type, value):
+            fake.store[value_name] = value
+
+        def query_value_ex(_key, value_name):
+            if value_name not in fake.store:
+                raise FileNotFoundError(value_name)
+            return fake.store[value_name], None
+
+        def delete_value(_key, value_name):
+            if value_name not in fake.store:
+                raise FileNotFoundError(value_name)
+            del fake.store[value_name]
+
+        fake.OpenKey = open_key
+        fake.SetValueEx = set_value_ex
+        fake.QueryValueEx = query_value_ex
+        fake.DeleteValue = delete_value
+        return fake
+
+    def test_module_level_api_roundtrip(self) -> None:
+        fake = self._riktig_winreg_lik()
+        self.assertTrue(autostart.enable_autostart(
+            script_path="C:\\App\\folder.py",
+            python_exe="C:\\Py\\python.exe",
+            winreg_module=fake,
+        ))
+        self.assertTrue(autostart.is_autostart_enabled(fake))
+        self.assertIn("folder.py", autostart.get_autostart_command(fake))
+        self.assertTrue(autostart.disable_autostart(fake))
+        self.assertFalse(autostart.is_autostart_enabled(fake))
+
+    def test_pyhkey_without_value_methods_is_used(self) -> None:
+        """Nyckelobjektet UTAN värdefunktioner (som riktigt PyHKEY) fungerar."""
+        fake = self._riktig_winreg_lik()
+        key = fake.OpenKey(fake.HKEY_CURRENT_USER, "x", 0, fake.KEY_READ)
+        self.assertFalse(hasattr(key, "QueryValueEx"))  # guard på faken självt
+
+    def test_odd_winreg_never_crashes(self) -> None:
+        """Udda winreg-implementation → no-op; appen startar ändå (§9)."""
+
+        class Tom(SimpleNamespace):
+            HKEY_CURRENT_USER = "HKCU"
+            KEY_SET_VALUE = "w"
+            KEY_READ = "r"
+            REG_SZ = "str"
+
+            def OpenKey(self, *args):
+                return SimpleNamespace(__enter__=lambda s: s, __exit__=lambda s, *a: None)
+
+        tom = Tom()
+        self.assertFalse(autostart.enable_autostart(winreg_module=tom))
+        self.assertFalse(autostart.is_autostart_enabled(winreg_module=tom))
+        self.assertFalse(autostart.disable_autostart(winreg_module=tom))
+        self.assertIsNone(autostart.get_autostart_command(winreg_module=tom))
 
 
 if __name__ == "__main__":

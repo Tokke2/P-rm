@@ -60,9 +60,9 @@ def enable_autostart(
         with winreg.OpenKey(
             winreg.HKEY_CURRENT_USER, RUN_KEY_PATH, 0, winreg.KEY_SET_VALUE
         ) as key:
-            key.SetValueEx(APP_VALUE_NAME, 0, winreg.REG_SZ, command)
+            winreg.SetValueEx(key, APP_VALUE_NAME, 0, winreg.REG_SZ, command)
         return True
-    except OSError as exc:
+    except Exception as exc:
         print(f"[Autostart] Kunde inte slå på autostart: {exc}")
         return False
 
@@ -77,11 +77,11 @@ def disable_autostart(winreg_module: Optional[Any] = None) -> bool:
         with winreg.OpenKey(
             winreg.HKEY_CURRENT_USER, RUN_KEY_PATH, 0, winreg.KEY_SET_VALUE
         ) as key:
-            key.DeleteValue(APP_VALUE_NAME)
+            winreg.DeleteValue(key, APP_VALUE_NAME)
         return True
     except FileNotFoundError:
         return True  # redan borta = mål uppnått
-    except OSError as exc:
+    except Exception as exc:
         print(f"[Autostart] Kunde inte ta bort autostart: {exc}")
         return False
 
@@ -95,9 +95,11 @@ def is_autostart_enabled(winreg_module: Optional[Any] = None) -> bool:
         with winreg.OpenKey(
             winreg.HKEY_CURRENT_USER, RUN_KEY_PATH, 0, winreg.KEY_READ
         ) as key:
-            key.QueryValueEx(APP_VALUE_NAME)
+            winreg.QueryValueEx(key, APP_VALUE_NAME)
         return True
-    except (FileNotFoundError, OSError):
+    except Exception:
+        # FileNotFoundError/OSError = värdet saknas; ALLT annat (t.ex.
+        # ändrad API) får aldrig krascha appen vid start.
         return False
 
 
@@ -110,9 +112,9 @@ def get_autostart_command(winreg_module: Optional[Any] = None) -> Optional[str]:
         with winreg.OpenKey(
             winreg.HKEY_CURRENT_USER, RUN_KEY_PATH, 0, winreg.KEY_READ
         ) as key:
-            value, _type = key.QueryValueEx(APP_VALUE_NAME)
+            value, _type = winreg.QueryValueEx(key, APP_VALUE_NAME)
         return str(value)
-    except (FileNotFoundError, OSError):
+    except Exception:
         return None
 
 

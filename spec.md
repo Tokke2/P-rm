@@ -5,9 +5,26 @@
 <!--
 ═══════════════════════════════════════════════════════════════════════════════
   © Copyright Rickard Längkvist {get_copyright_year()} - All rights reserved
-  Specifikation v6.9 — Sammanslagen & uppdaterad
+  Specifikation v7.0 — Sammanslagen & uppdaterad
   Senast uppdaterad: 2026-11-25
   Status: AKTIV UTVECKLING
+<!--
+  v7.0 — ÄNDRINGAR (2026-11-25, v1.7.1 — P0: autostart-krasch på Windows)
+  ───────────────────────────────────────────────────────────────
+  · RAPPORTERAD KRASCH: AttributeError: 'winreg.PyHKEY' object has no
+    attribute 'QueryValueEx' — autostart kallade key.QueryValueEx/
+    key.SetValueEx/key.DeleteValue. PyHKEY-objektet har bara Close/
+    Detach; värdefunktionerna finns på MODULE-nivå med nyckeln först.
+  · Fix: alla fyra anropen → winreg.SetValueEx(key, …) /
+    winreg.DeleteValue(key, …) / winreg.QueryValueEx(key, …).
+  · Försvarslag: enable/disable fångar Exception (inte bara OSError);
+    is_/get_ fångar Exception → no-op — registret kan aldrig krascha
+    appstarten.
+  · tests/test_autostart.py: permanent regressionssvit — riktig winreg-
+    API-simulering (PyHKEY utan värdefunktioner) + udda API → no-op.
+  · Tester: 3 nya — 119 totalt.
+-->
+
 <!--
   v6.9 — ÄNDRINGAR (2026-11-25, v1.7.0 — menyer + stöd à la TaskBord)
   ───────────────────────────────────────────────────────────────
