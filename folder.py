@@ -24,6 +24,7 @@ from __future__ import annotations
 import os
 import queue
 import re
+import subprocess
 import sys
 import threading
 from datetime import datetime
@@ -42,8 +43,8 @@ try:
         QApplication, QCheckBox, QComboBox, QFileDialog, QFrame,
         QGridLayout, QGroupBox, QHBoxLayout, QHeaderView, QLabel,
         QMainWindow, QMenu, QMessageBox, QPlainTextEdit, QPushButton,
-        QRadioButton, QScrollArea, QSpinBox, QStatusBar, QTableWidget,
-        QTableWidgetItem, QTabWidget, QVBoxLayout, QWidget,
+        QRadioButton, QScrollArea, QSpinBox, QStatusBar, QSystemTrayIcon,
+        QTableWidget, QTableWidgetItem, QTabWidget, QVBoxLayout, QWidget,
     )
 except ImportError as exc:  # tydligt fel i stället för traceback
     raise SystemExit(
@@ -97,6 +98,314 @@ SUPPORT_LINKS = (
 )
 GITHUB_PROJECT = "https://github.com/Tokke2/P-rm"
 GITHUB_ISSUES = GITHUB_PROJECT + "/issues"
+APP_ROOT = Path(__file__).resolve().parent
+DESKTOP_SHORTCUT_NAME = "Pärmetikett Generator.lnk"
+
+# ── Mus-hjul på omarkerade rullgardinsmenyer (användarönskemål) ──
+# Qt6 vägrar wheelevents på widgets utan fokus ("omarkerade") — dessa
+# subklasser sätter WheelFocus-policy så mushjulet verkar på rullgardiner
+# och spinboxar direkt när musen hovrar (utan att klicka först).
+try:
+    _QtWheelFocus = Qt.WheelFocus
+except AttributeError:          # äldre Qt-säkerhet
+    _QtWheelFocus = Qt.StrongFocus
+
+
+class ParmComboBox(QComboBox):
+    """QComboBox som lyssnar på mushjul även utan fokus."""
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setFocusPolicy(_QtWheelFocus)
+
+
+class ParmSpinBox(QSpinBox):
+    """QSpinBox som lyser på mushjul även utan fokus."""
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setFocusPolicy(_QtWheelFocus)
+
+
+# ── GUI-språk sv/en (#7) ─────────────────────────────────
+# Svenska = källtexter. _I18N mappar sv→en; apply_language() går igenom
+# alla widgets och översätter statiska texter (fungerar live, utan omstart).
+CURRENT_LANGUAGE = "sv"
+
+_I18N: dict = {
+    # Flikar
+    "Hjälp": "Help",
+    "Loggar": "Logs",
+    # Menyer
+    "&Uppdatera": "&Update",
+    "⬇️ Sök uppdatering nu (REQ-K4)": "⬇️ Check for updates now (REQ-K4)",
+    "&Hjälp & Stöd": "&Help & Support",
+    "💖 Stöd Pärmetikett Generator…": "💖 Support Pärmetikett Generator…",
+    "Donera via PayPal": "Donate via PayPal",
+    "Bjud på en kaffe via Ko-fi": "Buy a coffee via Ko-fi",
+    "⭐ Ge en stjärna på GitHub": "⭐ Star on GitHub",
+    "🌐 GitHub-projektet": "🌐 GitHub project",
+    "🐞 Rapportera fel / förslag": "🐞 Report bugs / suggestions",
+    "ℹ️ Om Pärmetikett Generator": "ℹ️ About Pärmetikett Generator",
+    "📎 Skapa skrivbordsgenväg (utan terminal)":
+        "📎 Create desktop shortcut (no terminal)",
+    # Etikettyp
+    "Etikettyp": "Label type",
+    "Smal (41×64 mm)": "Slim (41×64 mm)",
+    "Tjock (57×64 mm)": "Wide (57×64 mm)",
+    # Logotyp
+    "Logotyp": "Logo",
+    "📁 Välj logotyp (PDF/SVG/EPS…)": "📁 Choose logo (PDF/SVG/EPS…)",
+    "⭐ Använd appens logotyp (vektor)": "⭐ Use the app logo (vector)",
+    "📂 Öppna Logotyp-mappen": "📂 Open logo folder",
+    "Ingen logotyp vald": "No logo selected",
+    "✕ Ta bort logotyp": "✕ Remove logo",
+    # Inställningar
+    "Autoanpassa text": "Auto-fit text",
+    "Flera etiketter": "Multiple labels",
+    "Klipplinjer (kant till kant)": "Cut lines (edge to edge)",
+    "Förstärkta hörnmarkeringar (#22)": "Reinforced corner marks (#22)",
+    "Streckkod (Code 128) på etiketten (#2)": "Barcode (Code 128) on label (#2)",
+    "Automatisk logotypkontrast (#16)": "Automatic logo contrast (#16)",
+    "Antal etiketter:": "Number of labels:",
+    "📄 SKAPA PDF": "📄 CREATE PDF",
+    "🖨 Skriv ut direkt": "🖨 Print now",
+    "🗂 Skapa arkivindex (A4, platskoder) (#1)":
+        "🗂 Create archive index (A4, location codes) (#1)",
+    "📤 Öppna Export-mappen": "📤 Open Export folder",
+    "⬇️ Sök uppdatering (REQ-K4)": "⬇️ Check for updates (REQ-K4)",
+    "🕒 Auto-uppdatering 00:00 varje dag": "🕒 Auto-update 00:00 daily",
+    "🚀 Autostart vid inloggning (utan terminal)":
+        "🚀 Auto-start at login (no terminal)",
+    "📁 Minimera till systemfältet (tray) vid stängning":
+        "📁 Minimize to system tray on close",
+    "📄 Skapa även separata PDF:er per rad (utöver den samlade)":
+        "📄 Also create separate PDFs per row (in addition to combined)",
+    # Verifikat
+    "Verifikat (hela året)": "Vouchers (full year)",
+    "Period:": "Period:",
+    "Språk:": "Language:",
+    "År:": "Year:",
+    "Lappar/mån:": "Notes/month:",
+    "🧾 Skapa valt antal / månad": "🧾 Create selected count / month",
+    "🧾 Skapa BÅDA (1 & 2 per månad)": "🧾 Create BOTH (1 & 2 per month)",
+    # Höger panel
+    "Etiketttext": "Label text",
+    # Loggar
+    "Fellogg — aktiva fel (åtgärdade fel försvinner automatiskt)":
+        "Error log — active errors (fixed errors disappear automatically)",
+    "Tid": "Time",
+    "Kod": "Code",
+    "Meddelande": "Message",
+    "Antal": "Count",
+    "✕ Rensa valda fel": "✕ Clear selected errors",
+    "🗑 Rensa alla": "🗑 Clear all",
+    "🔄 Uppdatera": "🔄 Refresh",
+    "Applogg (senaste 100)": "App log (latest 100)",
+    # Tray
+    "Visa Pärmetikett Generator": "Show Pärmetikett Generator",
+    "Avsluta": "Quit",
+}
+_I18N_REVERSE: dict = {value: key for key, value in _I18N.items()}
+
+
+def tr_text(text: str) -> str:
+    """Översätter en statisk UI-text enligt CURRENT_LANGUAGE."""
+    if CURRENT_LANGUAGE == "en":
+        return _I18N.get(text, text)
+    if CURRENT_LANGUAGE == "sv":
+        return _I18N_REVERSE.get(text, text)
+    return text
+
+
+def apply_language(window) -> None:
+    """Går igenom alla widgets/menyer och översätter statiska texter.
+
+    Kallas vid start och vid språkbyte — ingen omstart behövs.
+    """
+    mapping = _I18N if CURRENT_LANGUAGE == "en" else _I18N_REVERSE
+    if CURRENT_LANGUAGE not in ("sv", "en"):
+        return
+    for widget in QApplication.allWidgets():
+        if isinstance(widget, QTabWidget):
+            for index in range(widget.count()):
+                text = widget.tabText(index)
+                if text in mapping:
+                    widget.setTabText(index, mapping[text])
+        elif isinstance(
+            widget, (QCheckBox, QRadioButton, QPushButton, QGroupBox, QLabel)
+        ):
+            text = widget.text()
+            if text in mapping:
+                widget.setText(mapping[text])
+    # Menybar (två nivåer: toppmeny → valfria submenyer)
+    for top_action in window.menuBar().actions():
+        if top_action.text() in mapping:
+            top_action.setText(mapping[top_action.text()])
+        menu = top_action.menu()
+        if menu is None:
+            continue
+        for action in menu.actions():
+            if action.text() in mapping:
+                action.setText(mapping[action.text()])
+            if action.menu() is not None:
+                for sub in action.menu().actions():
+                    if sub.text() in mapping:
+                        sub.setText(mapping[sub.text()])
+    # Loggar-tabellrubriker
+    fel_table = getattr(window, "fel_table", None)
+    if fel_table is not None:
+        fel_table.setHorizontalHeaderLabels(
+            [tr_text(t) for t in ("Tid", "Kod", "Meddelande", "Antal")]
+        )
+    # Hjälp-texten (fullständig en-version)
+    help_view = getattr(window, "help_view", None)
+    if help_view is not None:
+        help_view.setPlainText(build_help_text())
+
+
+def build_help_text() -> str:
+    """Hjälp-texten på aktuellt GUI-språk (sv/en)."""
+    tools = LogoModule.check_tools()
+    tool_text = (
+        f"PyMuPDF (PDF): {'✓' if tools['pymupdf'] else '✗'}, "
+        f"Ghostscript: {'✓' if tools['ghostscript'] else '✗'}, "
+        f"Inkscape: {'✓' if tools['inkscape'] else '✗'}, "
+        f"cairosvg: {'✓' if tools['cairosvg'] else '✗'}"
+    )
+    export_folder = LabelModule.get_export_folder()
+    if CURRENT_LANGUAGE == "en":
+        return f"""
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  Pärmetikett Generator (Qt6) — {get_copyright_notice()}
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+LOGOS:
+  • PDF (first page), SVG, EPS, AI and raster
+    (PNG, JPG, BMP, GIF, TIFF, WEBP)
+  • Vector logos are rendered to high-resolution PNG
+  • Conversion tools: {tool_text}
+
+LABEL TYPES:
+  • Slim spine: 41 × 64 mm
+  • Wide spine: 57 × 64 mm
+  • Index:      12 rows on A4 with numbering
+
+VOUCHERS — FULL YEAR:
+  • Period: months, quarters (Q1–Q4) or half-year (H1–H2)
+  • Language: se / en / no controls month abbreviations
+  • "Create BOTH" makes voucher_<year>_1 and _2 per month
+
+NEW FEATURES:
+  • Checkbox per label row — choose what gets printed
+  • Barcode (Code 128-B) at the bottom of each label
+  • Reinforced corner marks for exact trimming
+  • Automatic logo contrast (dark logos → white backing)
+  • Archive index (A4) with location codes A1-01, A1-02 …
+
+LOGS (§8):
+  • Error log = ACTIVE errors only; fixed ones disappear
+  • Manual clearing (selected/all) on the Logs tab
+  • Yesterday's entries are archived; archive kept 7 days
+  • Table: sort (click header), move columns (drag)
+
+UPDATER (REQ-K4, §3):
+  • Compares files (name + sha256) against latest Latest release
+  • Backup removed ONLY after the update is verified
+  • AUTO-UPDATE 00:00 daily (silent, logged in the app log)
+  • Tray notification when an auto-update installs something
+
+AUTO-START (§9):
+  • 'Auto-start at login' starts the app with pythonw.exe —
+    NO terminal window, neither at start nor scanning
+  • 'Create desktop shortcut' adds a one-click launcher
+  • Starta_Parmetikett.vbs in the app folder works too
+
+SUPPORT (voluntary — the app is free, ad-free):
+  • Right-click the window → '💖 Support Pärmetikett Generator…'
+  • Donate via PayPal (paypal.me/Rickard3dPrint) or buy a coffee
+    via Ko-fi (ko-fi.com/tokke2) — opens in your web browser
+  • The app never handles card or payment details
+
+SCREEN & SHARPNESS (§11):
+  • Qt6 scales automatically for high-DPI → sharp text on 4K
+  • The window starts in max-height mode with custom width
+
+EXPORT:
+  • All PDFs are saved in {export_folder}
+
+SHORTCUTS:
+  • Ctrl+N: new label field
+        """
+    return f"""
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  Pärmetikett Generator (Qt6) — {get_copyright_notice()}
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+LOGOTYPER:
+  • PDF (första sidan), SVG, EPS, AI och raster
+    (PNG, JPG, BMP, GIF, TIFF, WEBP)
+  • Vektorlogotyper renderas till högupplöst PNG
+  • Konverteringsverktyg: {tool_text}
+
+ETIKETTYPER:
+  • Rygg Smal:  41 × 64 mm
+  • Rygg Tjock: 57 × 64 mm
+  • Index:      12 rader på A4 med numrering
+
+VERIFIKAT — HELA ÅRET:
+  • Period: månader, kvartal (Q1–Q4) eller halvår (H1–H2)  [#10]
+  • Språk: se / en / no styr månadsförkortningarna          [#11]
+  • "Skapa BÅDA" gör verifikat_&lt;år&gt;_1_per_manad.pdf och
+    verifikat_&lt;år&gt;_2_per_manad.pdf
+
+NYA FUNKTIONER:
+  • Checkruta per etikettrad — kryssa för vad som skrivs ut
+  • Streckkod (Code 128-B) i etikettens underkant             [#2]
+  • Förstärkta hörnmarkeringar för exakt trimning             [#22]
+  • Automatisk logotypkontrast (mörka logotyper → vit baksida) [#16]
+  • Arkivindex (A4) med platskoder A1-01, A1-02 …             [#1]
+
+LOGGAR (§8):
+  • Fellogg = alla AKTIVA fel; åtgärdade försvinner automatiskt
+  • Manuell rensning (valda/alla) på Loggar-fliken
+  • Gårdagens poster arkiveras; arkivet rensas efter 7 dagar
+  • Tabellen: sortera (klick på kolumnhuvud), flytta (dra)
+
+UPDATER (REQ-K4, §3):
+  • Jämför filer (namn + sha256) mot senaste Latest-release
+  • Backup tas bort FÖRST när uppdateringen verifierats
+  • AUTO-UPDATERING 00:00 varje dag (tyst, loggas i apploggen)
+  • Tray-notis när auto-uppdatering installerat något
+
+AUTOSTART (§9):
+  • 'Autostart vid inloggning' startar appen automatiskt med
+    pythonw.exe — INGET terminalfönster, varken vid start eller
+    skanning
+  • 'Skapa skrivbordsgenväg' ger en enklicksstartare
+  • Starta_Parmetikett.vbs i programmappen gör samma sak
+
+STÖD (frivilligt — appen är gratis och reklamfri):
+  • Högerklicka på fönstret → '💖 Stöd Pärmetikett Generator…'
+    eller menyn 'Hjälp & Stöd'
+  • Donera via PayPal (paypal.me/Rickard3dPrint) eller bjud på en
+    kaffe via Ko-fi (ko-fi.com/tokke2) — länken öppnas i din
+    standardwebbläsare; kontrollera mottagare och belopp hos
+    betaltjänsten innan du bekräftar
+  • Appen hanterar inga kort- eller betalningsuppgifter
+  • Hjälp till utan att donera: ge stjärna på GitHub, rapportera
+    fel/förslag (Issues), dela projektet — se SUPPORT.md
+
+SKÄRM & SKÄRPA (§11):
+  • Qt6 skalar automatiskt för hög-DPI → skarp text på 4K
+  • Fönstret startar i max höjd-läge med anpassad bredd
+
+EXPORT:
+  • Alla PDF:er sparas i {export_folder}
+
+KORTKOMMANDON:
+  • Ctrl+N: nytt etikettfält
+        """
 
 VALID_LABEL_TYPES = {"rygg_smal", "rygg_tjock", "index"}
 
@@ -217,6 +526,10 @@ class MainWindow(QMainWindow):
         self.label_rows: List[tuple] = []   # (QCheckBox, QPlainTextEdit)
         self._upd_thread: Optional[threading.Thread] = None
         self._auto_upd_queue: "queue.Queue[dict]" = queue.Queue()
+        self.tray = None                    # QSystemTrayIcon (om tillgänglig)
+        self._tray_notice_shown = False
+        global CURRENT_LANGUAGE
+        CURRENT_LANGUAGE = str(self.saved.get("gui_language", "sv")) or "sv"
 
         # ── Flikar ───────────────────────────────────────
         self.tabs = QTabWidget()
@@ -243,6 +556,10 @@ class MainWindow(QMainWindow):
         status_bar = QStatusBar()
         status_bar.addWidget(status)
         self.setStatusBar(status_bar)
+
+        # ── Systemfältsikon (tray) + språk (#1, #7) ──────
+        self._setup_tray()
+        apply_language(self)
 
         # ── Startgeometri: MAX HÖJD-läge + anpassad bredd (§11) ──
         screen = self.screen().availableGeometry()
@@ -318,6 +635,28 @@ class MainWindow(QMainWindow):
             self.act_autostart.setChecked
         )
 
+        act_shortcut = help_menu.addAction(
+            "📎 Skapa skrivbordsgenväg (utan terminal)"
+        )
+        act_shortcut.triggered.connect(self._create_desktop_shortcut)
+
+        # GUI-språk (#7) — live-översättning, ingen omstart behövs
+        lang_menu = help_menu.addMenu("🌍 Språk / Language")
+        self.act_lang_sv = QAction("Svenska", self)
+        self.act_lang_sv.setCheckable(True)
+        self.act_lang_sv.setChecked(CURRENT_LANGUAGE == "sv")
+        self.act_lang_en = QAction("English", self)
+        self.act_lang_en.setCheckable(True)
+        self.act_lang_en.setChecked(CURRENT_LANGUAGE == "en")
+        lang_menu.addAction(self.act_lang_sv)
+        lang_menu.addAction(self.act_lang_en)
+        self.act_lang_sv.triggered.connect(
+            lambda: self._switch_language("sv")
+        )
+        self.act_lang_en.triggered.connect(
+            lambda: self._switch_language("en")
+        )
+
         help_menu.addSeparator()
         support_menu = help_menu.addMenu("💖 Stöd Pärmetikett Generator…")
         self._fill_support_menu(support_menu)
@@ -360,6 +699,110 @@ class MainWindow(QMainWindow):
         about = menu.addAction("ℹ️ Om Pärmetikett Generator")
         about.triggered.connect(self._show_about)
         menu.exec(self.mapToGlobal(pos))
+
+    # ──────────────────────────────────────────────────────
+    # TRAY (#1) — systemfältsikon + minimera + toast
+    # ──────────────────────────────────────────────────────
+
+    def _setup_tray(self) -> None:
+        """Skapar tray-ikon med snabbmeny (om systemfältet finns)."""
+        self.tray = None
+        if not QSystemTrayIcon.isSystemTrayAvailable():
+            return
+        self.tray = QSystemTrayIcon(self.windowIcon())
+        menu = QMenu()
+        show_act = menu.addAction("Visa Pärmetikett Generator")
+        show_act.triggered.connect(self._show_from_tray)
+        menu.addSeparator()
+        upd_act = menu.addAction("⬇️ Sök uppdatering nu (REQ-K4)")
+        upd_act.triggered.connect(self.check_updates_clicked)
+        if getattr(self, "act_auto_update", None) is not None:
+            menu.addAction(self.act_auto_update)  # samma action = synkad
+        menu.addSeparator()
+        support = menu.addMenu("💖 Stöd Pärmetikett Generator…")
+        self._fill_support_menu(support)
+        menu.addSeparator()
+        quit_act = menu.addAction("Avsluta")
+        quit_act.triggered.connect(QApplication.quit)
+        self.tray.setContextMenu(menu)
+        self.tray.setToolTip("Pärmetikett Generator")
+        self.tray.show()
+
+    def _show_from_tray(self) -> None:
+        self.show()
+        self.raise_()
+        self.activateWindow()
+
+    def _tray_notify(self, title: str, message: str) -> None:
+        if self.tray is not None:
+            self.tray.showMessage(
+                title, message, QSystemTrayIcon.Information, 6000
+            )
+
+    # ──────────────────────────────────────────────────────
+    # SPRÅK (#7) — sv/en live
+    # ──────────────────────────────────────────────────────
+
+    def _switch_language(self, lang: str) -> None:
+        global CURRENT_LANGUAGE
+        if lang not in ("sv", "en") or lang == CURRENT_LANGUAGE:
+            return
+        CURRENT_LANGUAGE = lang
+        self.saved["gui_language"] = lang
+        self.save_settings()
+        apply_language(self)
+        self.act_lang_sv.setChecked(lang == "sv")
+        self.act_lang_en.setChecked(lang == "en")
+        self._update_verifikat_info()
+        LoggModule.logg.log_app(f"GUI-språk ändrat: {lang}")
+
+    # ──────────────────────────────────────────────────────
+    # SKRIVBORDSGENVÄG (§9) — starta utan terminal
+    # ──────────────────────────────────────────────────────
+
+    def _create_desktop_shortcut(self) -> None:
+        """Skapar .lnk på skrivbordet → pythonw folder.py (inget terminal)."""
+        if not sys.platform.startswith("win"):
+            QMessageBox.information(
+                self, "Windows", "Genvägar skapas bara på Windows."
+            )
+            return
+        pythonw = AutostartModule.resolve_pythonw()
+        script = Path(__file__).resolve()
+        ps_command = (
+            "$ws = New-Object -ComObject WScript.Shell; "
+            "$desktop = [Environment]::GetFolderPath('Desktop'); "
+            f"$lnk = $ws.CreateShortcut((Join-Path $desktop "
+            f"'{DESKTOP_SHORTCUT_NAME}')); "
+            f"$lnk.TargetPath = '{pythonw}'; "
+            f"$lnk.Arguments = '\"{script}\"'; "
+            f"$lnk.WorkingDirectory = '{APP_ROOT}'; "
+            "$lnk.Save()"
+        )
+        flags = getattr(subprocess, "CREATE_NO_WINDOW", 0x08000000)
+        try:
+            subprocess.run(
+                ["powershell", "-NoProfile", "-Command", ps_command],
+                check=True, capture_output=True, creationflags=flags,
+            )
+            LoggModule.logg.log_app(
+                f"Skrivbordsgenväg skapad: {pythonw} \"{script}\""
+            )
+            QMessageBox.information(
+                self, "Genväg skapad ✅",
+                f"'{DESKTOP_SHORTCUT_NAME}' ligger nu på skrivbordet och "
+                "startar appen UTAN terminal (pythonw).\n\n"
+                "Tips: Starta_Parmetikett.vbs i programmappen gör "
+                "samma sak — dubbelklicka bara.",
+            )
+        except Exception as exc:
+            LoggModule.logg.log_error("SHORTCUT", str(exc))
+            QMessageBox.warning(
+                self, "Misslyckades",
+                f"Kunde inte skapa genvägen:\n{exc}\n\n"
+                "Använd Starta_Parmetikett.vbs i programmappen i stället "
+                "(dubbelklicka — startar utan terminal).",
+            )
 
     def _open_link(self, url: str) -> None:
         """Öppnar en länk i standardwebbläsaren (loggas i apploggen)."""
@@ -445,7 +888,7 @@ class MainWindow(QMainWindow):
         logo_v.addWidget(clear)
         top_row = QHBoxLayout()
         top_row.addWidget(QLabel("Logga från topp (px):"))
-        self.logo_top_spin = QSpinBox()
+        self.logo_top_spin = ParmSpinBox()
         self.logo_top_spin.setRange(0, 100)
         self.logo_top_spin.setValue(int(self.saved.get("logo_top_px", 5)))
         self.logo_top_spin.valueChanged.connect(self.on_logo_top_changed)
@@ -460,7 +903,7 @@ class MainWindow(QMainWindow):
         settings_v = QVBoxLayout(settings_box)
         settings_v.addWidget(QLabel("Textstorlek:"))
         size_row = QHBoxLayout()
-        self.text_size_spin = QSpinBox()
+        self.text_size_spin = ParmSpinBox()
         self.text_size_spin.setRange(8, 32)
         self.text_size_spin.setValue(
             int(self.saved.get("text_size", 16))
@@ -505,7 +948,7 @@ class MainWindow(QMainWindow):
         settings_v.addWidget(self.logo_contrast_check)
 
         settings_v.addWidget(QLabel("Antal etiketter:"))
-        self.antal_spin = QSpinBox()
+        self.antal_spin = ParmSpinBox()
         self.antal_spin.setRange(1, 50)
         self.antal_spin.setValue(int(self.saved.get("label_count", 1)))
         self.antal_spin.valueChanged.connect(
@@ -513,10 +956,15 @@ class MainWindow(QMainWindow):
         )
         settings_v.addWidget(self.antal_spin)
 
+        create_row = QHBoxLayout()
         create = QPushButton("📄 SKAPA PDF")
         create.setObjectName("accent")
         create.clicked.connect(self.create_pdf)
-        settings_v.addWidget(create)
+        create_row.addWidget(create)
+        print_btn = QPushButton("🖨 Skriv ut direkt")
+        print_btn.clicked.connect(lambda: self.create_pdf(print_after=True))
+        create_row.addWidget(print_btn)
+        settings_v.addLayout(create_row)
         arkivindex_btn = QPushButton("🗂 Skapa arkivindex (A4, platskoder) (#1)")
         arkivindex_btn.clicked.connect(self.create_arkivindex_pdf)
         settings_v.addWidget(arkivindex_btn)
@@ -546,6 +994,24 @@ class MainWindow(QMainWindow):
             self._on_autostart_toggled
         )
         settings_v.addWidget(self.autostart_checkbox)
+        self.tray_checkbox = QCheckBox(
+            "📁 Minimera till systemfältet (tray) vid stängning"
+        )
+        self.tray_checkbox.setChecked(
+            bool(self.saved.get("minimize_to_tray", False))
+        )
+        self.tray_checkbox.toggled.connect(lambda _c: self.save_settings())
+        settings_v.addWidget(self.tray_checkbox)
+        self.separate_rows_check = QCheckBox(
+            "📄 Skapa även separata PDF:er per rad (utöver den samlade)"
+        )
+        self.separate_rows_check.setChecked(
+            bool(self.saved.get("separate_row_pdfs", False))
+        )
+        self.separate_rows_check.toggled.connect(
+            lambda _c: self.save_settings()
+        )
+        settings_v.addWidget(self.separate_rows_check)
         left_v.addWidget(settings_box)
 
         # Verifikat
@@ -553,14 +1019,14 @@ class MainWindow(QMainWindow):
         verifikat_v = QVBoxLayout(verifikat_box)
         period_row = QHBoxLayout()
         period_row.addWidget(QLabel("Period:"))
-        self.period_combo = QComboBox()
+        self.period_combo = ParmComboBox()
         self.period_combo.addItems(["manad", "kvartal", "halvar"])
         saved_period = str(self.saved.get("verifikat_period", "manad"))
         if saved_period in VerifikatModule.PERIOD_MODES:
             self.period_combo.setCurrentText(saved_period)
         period_row.addWidget(self.period_combo)
         period_row.addWidget(QLabel("Språk:"))
-        self.language_combo = QComboBox()
+        self.language_combo = ParmComboBox()
         self.language_combo.addItems(["se", "en", "no"])
         saved_language = str(self.saved.get("verifikat_language", "se"))
         if saved_language in VerifikatModule.MONTHS_BY_LANGUAGE:
@@ -576,7 +1042,7 @@ class MainWindow(QMainWindow):
 
         year_row = QHBoxLayout()
         year_row.addWidget(QLabel("År:"))
-        self.year_spin = QSpinBox()
+        self.year_spin = ParmSpinBox()
         self.year_spin.setRange(
             VerifikatModule.MIN_YEAR, VerifikatModule.MAX_YEAR
         )
@@ -586,7 +1052,7 @@ class MainWindow(QMainWindow):
         self.year_spin.setValue(saved_year)
         year_row.addWidget(self.year_spin)
         year_row.addWidget(QLabel("Lappar/mån:"))
-        self.per_month_spin = QSpinBox()
+        self.per_month_spin = ParmSpinBox()
         self.per_month_spin.setRange(
             VerifikatModule.MIN_PER_MONTH, VerifikatModule.MAX_PER_MONTH
         )
@@ -641,81 +1107,10 @@ class MainWindow(QMainWindow):
 
     def _build_help_tab(self) -> None:
         layout = QVBoxLayout(self.help_tab)
-        tools = LogoModule.check_tools()
-        tool_text = (
-            f"PyMuPDF (PDF): {'✓' if tools['pymupdf'] else '✗'}, "
-            f"Ghostscript: {'✓' if tools['ghostscript'] else '✗'}, "
-            f"Inkscape: {'✓' if tools['inkscape'] else '✗'}, "
-            f"cairosvg: {'✓' if tools['cairosvg'] else '✗'}"
-        )
         help_view = QPlainTextEdit()
         help_view.setReadOnly(True)
-        help_view.setPlainText(f"""
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-  Pärmetikett Generator (Qt6) — {get_copyright_notice()}
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-LOGOTYPER:
-  • PDF (första sidan), SVG, EPS, AI och raster
-    (PNG, JPG, BMP, GIF, TIFF, WEBP)
-  • Vektorlogotyper renderas till högupplöst PNG
-  • Konverteringsverktyg: {tool_text}
-
-ETIKETTYPER:
-  • Rygg Smal:  41 × 64 mm
-  • Rygg Tjock: 57 × 64 mm
-  • Index:      12 rader på A4 med numrering
-
-VERIFIKAT — HELA ÅRET:
-  • Period: månader, kvartal (Q1–Q4) eller halvår (H1–H2)  [#10]
-  • Språk: se / en / no styr månadsförkortningarna          [#11]
-  • "Skapa BÅDA" gör verifikat_&lt;år&gt;_1_per_manad.pdf och
-    verifikat_&lt;år&gt;_2_per_manad.pdf
-
-NYA FUNKTIONER:
-  • Checkruta per etikettrad — kryssa för vad som skrivs ut
-  • Streckkod (Code 128-B) i etikettens underkant             [#2]
-  • Förstärkta hörnmarkeringar för exakt trimning             [#22]
-  • Automatisk logotypkontrast (mörka logotyper → vit baksida) [#16]
-  • Arkivindex (A4) med platskoder A1-01, A1-02 …             [#1]
-
-LOGGAR (§8):
-  • Fellogg = alla AKTIVA fel; åtgärdade försvinner automatiskt
-  • Manuell rensning (valda/alla) på Loggar-fliken
-  • Gårdagens poster arkiveras; arkivet rensas efter 7 dagar
-  • Tabellen: sortera (klick på kolumnhuvud), flytta (dra)
-
-UPDATER (REQ-K4, §3):
-  • Jämför filer (namn + sha256) mot senaste Latest-release
-  • Backup tas bort FÖRST när uppdateringen verifierats
-  • AUTO-UPDATERING 00:00 varje dag (tyst, loggas i apploggen)
-
-AUTOSTART (§9):
-  • 'Autostart vid inloggning' startar appen automatiskt med
-    pythonw.exe — INGET terminalfönster, varken vid start eller
-    skanning
-
-STÖD (frivilligt — appen är gratis och reklamfri):
-  • Högerklicka på fönstret → '💖 Stöd Pärmetikett Generator…'
-    eller menyn 'Hjälp & Stöd'
-  • Donera via PayPal (paypal.me/Rickard3dPrint) eller bjud på en
-    kaffe via Ko-fi (ko-fi.com/tokke2) — länken öppnas i din
-    standardwebbläsare; kontrollera mottagare och belopp hos
-    betaltjänsten innan du bekräftar
-  • Appen hanterar inga kort- eller betalningsuppgifter
-  • Hjälp till utan att donera: ge stjärna på GitHub, rapportera
-    fel/förslag (Issues), dela projektet — se SUPPORT.md
-
-SKÄRM & SKÄRPA (§11):
-  • Qt6 skalar automatiskt för hög-DPI → skarp text på 4K
-  • Fönstret startar i max höjd-läge med anpassad bredd
-
-EXPORT:
-  • Alla PDF:er sparas i {LabelModule.get_export_folder()}
-
-KORTKOMMANDON:
-  • Ctrl+N: nytt etikettfält
-        """)
+        self.help_view = help_view   # språkbyte uppdaterar via apply_language
+        help_view.setPlainText(build_help_text())
         layout.addWidget(help_view)
 
     # ──────────────────────────────────────────────────────
@@ -878,7 +1273,25 @@ KORTKOMMANDON:
     def closeEvent(self, event) -> None:  # noqa: N802 (Qt-API)
         self.on_logo_top_changed(save=False)
         self.save_settings()
+        # #1: stäng = minimera till tray om kryssrutan är på
+        if (
+            getattr(self, "tray_checkbox", None) is not None
+            and self.tray_checkbox.isChecked()
+            and self.tray is not None
+        ):
+            event.ignore()
+            self.hide()
+            if not self._tray_notice_shown:
+                self._tray_notify(
+                    "Pärmetikett Generator",
+                    "Appen körs kvar i systemfältet — högerklicka → Avsluta",
+                )
+                self._tray_notice_shown = True
+            LoggModule.logg.log_app("Minimerad till systemfältet (tray)")
+            return
         LoggModule.logg.log_app("App stängd")
+        if self.tray is not None:
+            self.tray.hide()
         super().closeEvent(event)
 
     def on_logo_top_changed(self, save: bool = True) -> None:
@@ -1083,7 +1496,7 @@ KORTKOMMANDON:
             return None
         return cleaned[:24]
 
-    def create_pdf(self) -> None:
+    def create_pdf(self, print_after: bool = False) -> None:
         self.on_logo_top_changed(save=False)
         label_type = self._label_type_value()
         all_texts = self._included_texts()
@@ -1133,7 +1546,63 @@ KORTKOMMANDON:
         LoggModule.logg.log_app(
             f"PDF skapad: {out_path.name} ({len(texts)} etiketter)"
         )
+        # #5: separata PDF:er per rad utöver den samlade filen
+        if self.separate_rows_check.isChecked() and len(texts) > 1:
+            created_rows = 0
+            for row_text in texts:
+                row_title = re.sub(
+                    r'[\\/*?:"<>|]', "", row_text.split("\n")[0]
+                )[:40].replace(" ", "_") or "etikett"
+                row_path = LabelModule.get_export_path(
+                    f"{label_type}_{row_title}.pdf"
+                )
+                try:
+                    row_canvas = canvas.Canvas(
+                        str(row_path), pagesize=A4, pageCompression=1
+                    )
+                    if label_type == "index":
+                        self._draw_index_labels(row_canvas, [row_text])
+                    else:
+                        self._draw_spine_labels(row_canvas, [row_text])
+                    row_canvas.save()
+                    created_rows += 1
+                except Exception as row_exc:
+                    LoggModule.logg.log_error(
+                        "PDF_CREATE",
+                        f"Separat PDF '{row_text[:20]}': {row_exc}",
+                    )
+            if created_rows:
+                LoggModule.logg.log_app(
+                    f"Separata PDF:er skapade: {created_rows} st "
+                    "(utöver samlad fil)"
+                )
         self.save_settings()
+        if print_after:
+            # #2: skicka direkt till standardskrivaren (Windows print-verb)
+            if sys.platform.startswith("win") and hasattr(os, "startfile"):
+                try:
+                    os.startfile(str(out_path), "print")  # noqa: S606
+                    LoggModule.logg.log_app(
+                        f"Utskrift skickad till standardskrivaren: "
+                        f"{out_path.name}"
+                    )
+                    QMessageBox.information(
+                        self, "Skickad till skrivaren",
+                        f"✓ {out_path.name} skickad till standardskrivaren."
+                        f"\n\n{get_copyright_notice()}",
+                    )
+                except Exception as print_exc:
+                    LoggModule.logg.log_error("PRINT", str(print_exc))
+                    QMessageBox.warning(
+                        self, "Utskrift misslyckades",
+                        f"Kunde inte skicka till skrivaren:\n{print_exc}"
+                        "\n\nPDF:en är sparad och kan skrivas ut manuellt.",
+                    )
+            else:
+                QMessageBox.information(
+                    self, "Utskrift", "Direktutskrift kräver Windows."
+                )
+            return
         QMessageBox.information(
             self, "PDF skapad",
             f"✓ {out_path.name}\n\nSparad i:\n{out_path.parent}\n\n"
@@ -1555,6 +2024,12 @@ KORTKOMMANDON:
         result = self._auto_upd_queue.get_nowait()
         if result.get("uppdaterad"):
             status = f"uppdaterad till {result.get('tag')}"
+            # #1: tray-notis när auto-uppdatering installerat något
+            self._tray_notify(
+                "Auto-uppdatering klar",
+                f"Appen uppdaterad till {result.get('tag')} — "
+                "starta om appen för att gälla.",
+            )
         elif result.get("ok"):
             status = "ingen uppdatering behövs"
         else:
@@ -1593,8 +2068,12 @@ KORTKOMMANDON:
 
 def main() -> None:
     """Startar Pärmetikett Generator (Qt6)."""
+    global CURRENT_LANGUAGE
     LabelModule.register_preferred_bold_font()
+    # #9: självdiagnos — reparerar korrupt settings.json från intern backup
+    SettingsModule.diagnose_settings()
     saved = SettingsModule.load_settings()
+    CURRENT_LANGUAGE = str(saved.get("gui_language", "sv")) or "sv"
     app = QApplication(sys.argv)
     app.setApplicationName("Pärmetikett Generator")
     app.setStyleSheet(build_qss())

@@ -5,10 +5,35 @@
 <!--
 ═══════════════════════════════════════════════════════════════════════════════
   © Copyright Rickard Längkvist {get_copyright_year()} - All rights reserved
-  Specifikation v7.3 — Sammanslagen & uppdaterad
+  Specifikation v7.4 — Sammanslagen & uppdaterad
   Senast uppdaterad: 2026-11-25
   Status: AKTIV UTVECKLING
 <!--
+  v7.4 — ÄNDRINGAR (2026-11-25, v1.8.0 — tray/print/språk/wheel/diagnos)
+  ───────────────────────────────────────────────────────────────
+  · #1 TRAY: QSystemTrayIcon (Visa/Uppdatering/act_auto_update synkad/
+    Stöd/Avsluta); closeEvent → hide+notis när minimize_to_tray på;
+    tray-toast vid auto-upd-installation. Kryssruta i Inställningar.
+  · #2 SKRIV UT DIREKT: create_pdf(print_after) → os.startfile(path,
+    "print") på win32; knapp bredvid SKAPA PDF; PRINT-loggkod.
+  · #5 SEPARATA PDF:ER PER RAD: separate_row_pdfs-kryssruta — utöver
+    samlad fil skapas en PDF per etikettrad (endast när >1 rad).
+  · #7 GUI-SPRÅK sv/en: _I18N (45+ statiska texter) + _I18N_REVERSE +
+    apply_language (widget-walk, menyer 2 nivåer, tabellrubriker,
+    hjälp-text) + _switch_language (live, ingen omstart);
+    build_help_text() med full EN-version. Meny: Hjälp & Stöd → Språk.
+  · MUSHJUL: ParmComboBox/ParmSpinBox med Qt.WheelFocus — wheel verkar
+    på omarkerade rullgardiner/spinboxar (Qt6-gate). Vakt: count
+    QComboBox( == 0 i folder.py.
+  · START UTAN TERMINAL: Starta_Parmetikett.vbs (dubbelklick, pythonw,
+    stil 0) + menyval "Skapa skrivbordsgenväg" (PowerShell WScript.Shell
+    .lnk, CREATE_NO_WINDOW). Autostart-valet oförändrat.
+  · #9 SETTINGS-DIAGNOS: diagnose_settings(path, bak_path) — testläs;
+    korrupt → reparera från .bak (uppdaterad vid varje sparning) eller
+    default; atomisk sparning (tmp+replace). Anropas först i main().
+    Nya nycklar: minimize_to_tray, separate_row_pdfs, gui_language.
+  · Tester: 15 nya — 138 totalt.
+-->
   v7.3 — ÄNDRINGAR (2026-11-25, v1.7.4 — 10-meddelanderegeln)
   ───────────────────────────────────────────────────────────────
   · PDFSORTER_FORSLAG.md: batch #1 → arkiverad; batch #2 visad (10 nya

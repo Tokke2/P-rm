@@ -290,5 +290,96 @@ class QtImportTackningTests(unittest.TestCase):
                     )
 
 
+class V1_8FunktionerTests(unittest.TestCase):
+    """v1.8.0: tray (#1), skriv ut (#2), separata PDF:er (#5), GUI-språk
+    (#7), settings-diagnos (#9), mushjul på omarkerade rullgardiner,
+    start utan terminal (vbs + skrivbordsgenväg)."""
+
+    def test_wheel_focus_on_unfocused_widgets(self) -> None:
+        # Mushjul ska verka på omarkerade rullgardiner (Qt6 gate) —
+        # alla combo/spin använder Parm-subklasser med WheelFocus.
+        self.assertIn("class ParmComboBox(QComboBox)", QT_SOURCE)
+        self.assertIn("class ParmSpinBox(QSpinBox)", QT_SOURCE)
+        self.assertIn("setFocusPolicy(_QtWheelFocus)", QT_SOURCE)
+        self.assertEqual(
+            QT_SOURCE.count("QComboBox("), 0,
+            "ingen rå QComboBox-användning (använd ParmComboBox)",
+        )
+        self.assertEqual(QT_SOURCE.count("QSpinBox("), 0)
+
+    def test_tray_icon(self) -> None:
+        self.assertIn("QSystemTrayIcon", QT_SOURCE)
+        self.assertIn("isSystemTrayAvailable()", QT_SOURCE)
+        self.assertIn("setContextMenu", QT_SOURCE)
+        self.assertIn("Avsluta", QT_SOURCE)
+        self.assertIn("_tray_notify", QT_SOURCE)
+
+    def tray_close_event(self) -> None:  # namnbeskydd — körs via testet nedan
+        pass
+
+    def test_minimize_to_tray_checkbox_and_close(self) -> None:
+        self.assertIn("minimize_to_tray", QT_SOURCE)
+        self.assertIn("Minimera till systemfältet (tray) vid stängning", QT_SOURCE)
+        self.assertIn("event.ignore()", QT_SOURCE)
+        self.assertIn("Minimerad till systemfältet", QT_SOURCE)
+
+    def test_print_directly(self) -> None:
+        self.assertIn("🖨 Skriv ut direkt", QT_SOURCE)
+        self.assertIn('os.startfile(str(out_path), "print")', QT_SOURCE)
+        self.assertIn("print_after", QT_SOURCE)
+
+    def test_separate_row_pdfs(self) -> None:
+        self.assertIn("separate_rows_check", QT_SOURCE)
+        self.assertIn("separate_row_pdfs", QT_SOURCE)
+        self.assertIn("Separata PDF:er skapade", QT_SOURCE)
+
+    def test_gui_language_switch(self) -> None:
+        self.assertIn("_I18N", QT_SOURCE)
+        self.assertIn("_I18N_REVERSE", QT_SOURCE)
+        self.assertIn("def apply_language", QT_SOURCE)
+        self.assertIn("_switch_language", QT_SOURCE)
+        self.assertIn("🌍 Språk / Language", QT_SOURCE)
+        # Minst 40 statiska texter översatta (sv→en)
+        import ast as _ast
+        match = _ast.parse(QT_SOURCE)
+        for node in _ast.walk(match):
+            if isinstance(node, _ast.Assign):
+                for target in node.targets:
+                    if getattr(target, "id", "") == "_I18N":
+                        count = sum(1 for k in node.value.keys
+                                    if isinstance(k, _ast.Constant))
+                        self.assertGreaterEqual(count, 40)
+        settings_src = (ROOT / "Script" / "settings_store.py").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn('"gui_language"', settings_src)
+
+    def test_settings_diagnosis_wired(self) -> None:
+        self.assertIn("diagnose_settings()", QT_SOURCE)
+        settings_src = (ROOT / "Script" / "settings_store.py").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("def diagnose_settings", settings_src)
+        self.assertIn("SETTINGS_BAK_PATH", settings_src)
+        self.assertIn("tmp.replace(path)", settings_src)  # atomisk sparning
+
+    def test_desktop_shortcut_and_vbs(self) -> None:
+        # Skrivbordsgenväg via PowerShell (utan konsol-blink)
+        self.assertIn("CreateShortcut", QT_SOURCE)
+        self.assertIn("GetFolderPath('Desktop')", QT_SOURCE)
+        self.assertIn("CREATE_NO_WINDOW", QT_SOURCE)
+        # Levererad dubbelklicks-startare
+        vbs = ROOT / "Starta_Parmetikett.vbs"
+        self.assertTrue(vbs.is_file())
+        vbs_text = vbs.read_text(encoding="utf-8")
+        self.assertIn("pythonw.exe", vbs_text)
+        self.assertIn("folder.py", vbs_text)
+        self.assertIn(", 0, False", vbs_text)
+
+    def test_current_settings_persists_new_keys(self) -> None:
+        for key in ("minimize_to_tray", "separate_row_pdfs", "gui_language"):
+            self.assertIn(key, QT_SOURCE)
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -6,6 +6,41 @@ PDF-etiketter för pärmar och arkivering: ryggetiketter (41×64 mm /
 
 ## Nya förbättringar
 
+### v1.8.0 — tray, skriv ut direkt, språk sv/en, mushjul, start utan terminal + 2 förslag
+
+* **Systemfältsikon (tray) (#1)**: ikon i systemfältet med snabbmeny (visa,
+  sök uppdatering, auto-upd-på/av, Stöd-menyn, Avsluta). Ny kryssruta
+  **"📁 Minimera till systemfältet (tray) vid stängning"** — stäng = körs
+  kvar i tray (notis första gången). **Tray-notis** när auto-uppdatering
+  00:00 installerat något.
+* **🖨 Skriv ut direkt (#2)**: ny knapp bredvid SKAPA PDF — skickar PDF:n
+  direkt till standardskrivaren (Windows print-verb); PDF:en sparas som
+  vanligt i Export-mappen.
+* **📄 Skapa även separata PDF:er per rad (#5)**: kryssruta — utöver den
+  samlade PDF:en skapas en egen fil per etikettrad (bra när flera personer
+  ska dela upp utskriften).
+* **GUI-språk sv/en (#7)**: menyn **Hjälp & Stöd → 🌍 Språk / Language** —
+  hela gränssnittet (flikar, menyer, knappar, rutor, tabellrubriker) +
+  fullständig hjälptext översätts **live, utan omstart**. Sparas i
+  settings (`gui_language`).
+* **Mushjul på omarkerade rullgardiner** (användarönskemål): Qt6 vägrar
+  wheelevents på widget utan fokus — nu lyssnar alla rullgardiner
+  (period/språk) och spinboxar (år/lappar/antal/storlek/toppx) på mushjulet
+  direkt vid hovring, utan att klicka först.
+* **Start utan terminal (§9)**: **`Starta_Parmetikett.vbs`** i
+  programmappen — dubbelklicka, appen startar med pythonw (inget fönster).
+  Nytt menyval **"📎 Skapa skrivbordsgenväg (utan terminal)"** skapar en
+  .lnk på skrivbordet (pythonw, ikon, rätt arbetskatalog). Autostart-valet
+  (🚀 checkbox/meny) finns kvar som tidigare.
+* **Settings-självdiagnos (#9)**: settings.json kontrolleras vid start —
+  korrupt fil **repareras automatiskt från intern backup**
+  (settings.json.bak, uppdaterad vid varje sparning); sparningen är nu
+  atomisk (ingen halvskriven fil). Loggas på Loggar-fliken.
+* Nya settings-nycklar (§4): `minimize_to_tray`, `separate_row_pdfs`,
+  `gui_language` — alla med svenska-standardvärden, inga gamla nycklar
+  borttagna.
+* Tester: 15 nya (settings-diagnos 6 + vakttester 9) — **138 st totalt**.
+
 ### v1.7.4 — förslagsbatch #2 (10-meddelanderegeln)
 
 * Uppdaterarens JSON-bootstrap bekräftad live av användaren (ok/verified,
