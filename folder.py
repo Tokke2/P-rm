@@ -8,9 +8,11 @@
 from __future__ import annotations
 
 import os
+import queue
 import re
 import subprocess
 import sys
+import threading
 import tkinter as tk
 from datetime import datetime
 from pathlib import Path
@@ -33,6 +35,7 @@ try:
     from Script import loggar as LoggModule
     from Script import skarm as SkarmModule
     from Script import gui_helpers as GuiHelpersModule
+    from Script import updater as UpdaterModule
 except ImportError:
     import label as LabelModule            # type: ignore[no-redef]
     import logotyp as LogoModule            # type: ignore[no-redef]
@@ -43,6 +46,7 @@ except ImportError:
     import loggar as LoggModule              # type: ignore[no-redef]
     import skarm as SkarmModule              # type: ignore[no-redef]
     import gui_helpers as GuiHelpersModule   # type: ignore[no-redef]
+    import updater as UpdaterModule          # type: ignore[no-redef]
 
 
 # === Konstanter ===
@@ -224,6 +228,13 @@ class LabelGUI:
             f"App startad (städning: {housekeeping['arkiverade']} arkiverade, "
             f"{len(housekeeping['raderade'])} arkiv raderade)"
         )
+
+        # REQ-K4: tyst uppdateringskontroll i bakgrunden (ingen nedladdning
+        # utan användaren klickar 'Sök uppdatering').
+        self._upd_thread: Optional[threading.Thread] = None
+        threading.Thread(
+            target=self._auto_check_updates, daemon=True
+        ).start()
 
     @staticmethod
     def _clamp(value, minimum: int, maximum: int) -> int:
@@ -437,6 +448,10 @@ class LabelGUI:
         ttk.Button(
             left, text="📤 Öppna Export-mappen", command=self.open_export_folder,
         ).pack(fill="x", pady=2)
+        ttk.Button(
+            left, text="⬇️ Sök uppdatering (REQ-K4)",
+            command=self.check_updates_clicked,
+        ).pack(fill="x", pady=2)
 
         ttk.Separator(left, orient="horizontal").pack(fill="x", pady=10)
 
@@ -591,6 +606,24 @@ SKÄRM & SKÄRPA (§11):
     anpassad bredd — inget terminalfönster behövs (kör pythonw.exe)
   • DPI-medveten rendering (Windows) → skarp text på 4K/skalning
   • Loggar-flikens kolumner kan sorteras (klick) och flyttas (dra)
+
+UPDATER (REQ-K4, §3):
+  • 'Sök uppdatering' jämför filer (namn + sha256) mot senaste
+    Latest-release och uppdaterar ENDAST det som skiljer
+  • Backup skapas först; den tas bort FÖRST när uppdateringen
+    verifierats som lyckad — annars full rollback
+  • Releaser som pekar på 'main' uppdateras aldrig (§1)
+  • Tyst kontroll vid start (loggas i apploggen) — nedladdning sker
+    först när du klickar 'Sök uppdatering'
+
+UPDATER (REQ-K4, §3):
+  • 'Sök uppdatering' jämför filer (namn + sha256) mot senaste
+    Latest-release och uppdaterar ENDAST det som skiljer
+  • Backup skapas först; den tas bort FÖRST när uppdateringen
+    verifierats som lyckad — annars full rollback
+  • Releaser som pekar på 'main' vägras aldrig uppdateras (§1)
+  • Tyst kontroll vid start (loggas i apploggen) — nedladdning sker
+    först när du klickar 'Sök uppdatering'
 
 LOGGOTYPMAPP:
   {DEFAULT_LOGO_FOLDER}
@@ -806,6 +839,85 @@ LOGGOTYPMAPP:
         removed = LoggModule.logg.clear_errors(None)
         LoggModule.logg.log_app(f"Alla fel rensade ({removed} st)", "INFO")
         self._refresh_loggar()
+
+    # ──────────────────────────────────────────────────────
+    # UPDATER (REQ-K4, §3) — jämför filer mot Latest-release
+    # ──────────────────────────────────────────────────────
+
+    def _auto_check_updates(self) -> None:
+        """Tyst startkontroll: finns en nyare release? (loggas i applog)"""
+        try:
+            result = UpdaterModule.check_for_new_release()
+            if result.get("ny_release"):
+                LoggModule.logg.log_app(
+                    f"Ny release {result['tag']} finns "
+                    f"(installerad: {result['installed']}) — "
+                    "välj 'Sök uppdatering'", "VARNING"
+                )
+            else:
+                LoggModule.logg.log_app(
+                    f"Uppdateringskontroll: senaste version redan installerad "
+                    f"({result.get('installed')})"
+                )
+        except Exception as exc:
+            LoggModule.logg.log_error(
+                "UPD_CHECK", f"Startkontroll misslyckades: {exc}"
+            )
+
+    def check_updates_clicked(self) -> None:
+        """Kör full uppdatering (jämför filer → backup → verifiera) i bakgrund."""
+        if self._upd_thread is not None and self._upd_thread.is_alive():
+            messagebox.showinfo(
+                "Pågår", "En uppdateringskontroll körs redan — vänta lite."
+            )
+            return
+        LoggModule.logg.log_app(
+            "Uppdatering startad manuellt (filjämförelse mot Latest-release)"
+        )
+        result_queue: "queue.Queue[dict]" = queue.Queue()
+        self._upd_thread = threading.Thread(
+            target=lambda: result_queue.put(UpdaterModule.run_update()),
+            daemon=True,
+        )
+        self._upd_thread.start()
+
+        def poll() -> None:
+            if result_queue.empty():
+                self.root.after(150, poll)
+                return
+            result = result_queue.get_nowait()
+            self._show_update_result(result)
+
+        self.root.after(150, poll)
+
+    def _show_update_result(self, result: dict) -> None:
+        """Visar uppdateringsresultat för användaren."""
+        if result.get("ok") and result.get("uppdaterad"):
+            messagebox.showinfo(
+                "Uppdatering klar ✅",
+                f"Uppdaterad till {result.get('tag')}!\n\n"
+                f"Uppdaterade filer: {result.get('copied')}\n"
+                f"Raderade gamla filer: {result.get('removed')}\n"
+                f"Oförändrade: {result.get('unchanged')}\n\n"
+                f"Verifiering: OK\n"
+                f"Backup: borttagen efter lyckad verifiering\n\n"
+                f"Starta om appen för att alla ändringar ska gälla.\n"
+                f"{get_copyright_notice()}",
+            )
+        elif result.get("ok"):
+            messagebox.showinfo(
+                "Ingen uppdatering behövs",
+                result.get("meddelande", "Du har redan senaste versionen."),
+            )
+        else:
+            LoggModule.logg.log_error(
+                "UPD_APPLY", result.get("fel", "Okänt uppdateringsfel")
+            )
+            messagebox.showerror(
+                "Uppdatering misslyckades",
+                f"{result.get('fel', 'Okänt fel')}\n\n"
+                f"Se Loggar-fliken för detaljer.",
+            )
 
     # ──────────────────────────────────────────────────────
     # LOGOTYP

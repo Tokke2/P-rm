@@ -5,9 +5,33 @@
 <!--
 ═══════════════════════════════════════════════════════════════════════════════
   © Copyright Rickard Längkvist {get_copyright_year()} - All rights reserved
-  Specifikation v6.3 — Sammanslagen & uppdaterad
+  Specifikation v6.4 — Sammanslagen & uppdaterad
   Senast uppdaterad: 2026-11-25
   Status: AKTIV UTVECKLING
+<!--
+  v6.4 — ÄNDRINGAR (2026-11-25, v1.3.0 — uppdaterare REQ-K4)
+  ───────────────────────────────────────────────────────────────
+  · Script/updater.py — filjämförande uppdaterare (REQ-K4, §3):
+      1) get_latest_release_info() via api.github.com (Latest)
+      2) vägrar releaser med target_commitish == 'main' (§1)
+      3) compare_files(): relativ sökväg + sha256 mot release-källarkivet
+         (codeload.github.com tar.gz) — uppdaterar ENDAST skillnaden
+      4) backup till Uppdatering_backup/ (ändrade/raderade filer)
+      5) apply_update(): kopiera nytt, radera utgånget
+      6) verifiering: filuppsättning + hash EXAKT = releasen
+      7) backup tas bort FÖRST vid lyckad verifiering; vid fel rollback
+  · check_for_new_release(): tyst startkontroll (tråd, loggar i applog)
+  · GUI: knapp "⬇️ Sök uppdatering (REQ-K4)" (bakgrundstråd + after-poll,
+    ingen frysning), resultatdialog, fel → Loggar-fliken
+  · Skydd: SKIP_DIRS (Loggar/Logotyp/Profiler/export/backup/pycache)
+    + SKIP_FILES (settings.json) röras aldrig
+  · VERSION.txt = installerad version (0.0.0 om saknas); release nyare →
+    uppdatera, annars "Redan senaste versionen"
+  · .gitignore: Uppdatering_backup/ tillagd
+  · Inga externa beroenden (urllib + tarfile + hashlib, stdlib)
+  · Tester: tests/test_updater.py (17 st, helt offline via injicerade
+    fetch_info/download_archive) — 73 tester totalt
+-->
 <!--
   v6.3 — ÄNDRINGAR (2026-11-25, v1.2.0 — loggsystem + skärm/DPI)
   ───────────────────────────────────────────────────────────────

@@ -6,6 +6,7 @@ export/
 Profiler/
 Logotyp/
 Loggar/
+Uppdatering_backup/
 settings.json
 *.log
 .DS_Store

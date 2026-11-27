@@ -6,6 +6,25 @@ verifikatetiketter för ett helt år.
 
 ## Nya förbättringar
 
+### v1.3.0 — uppdaterare i appen (REQ-K4, §3)
+
+* **Ny knapp "⬇️ Sök uppdatering (REQ-K4)"** i vänsterpanelen:
+  1. Hämtar senaste **Latest**-release från GitHub (api.github.com)
+  2. **Vägrar releaser som pekar på `main`** (§1 — jobba aldrig emot main)
+  3. **Jämför filer** (relativ sökväg + sha256) mot release-källarkivet
+     (codeload.github.com) — **uppdaterar endast det som skiljer**
+  4. **Backar upp** varje fil som ändras/raderas till `Uppdatering_backup/`
+  5. Verifierar efteråt: filuppsättning + hash ska **exakt** matcha releasen
+  6. **Backup tas bort först när verifieringen lyckats** — vid fel: full rollback
+* **Tyst kontroll vid appstart** (bakgrundstråd): loggar i apploggen om en
+  ny release finns — nedladdning sker först när användaren klickar
+* Användardata (`settings.json`, `Loggar/`, `Logotyp/`, `Profiler/`,
+  `export/`) röras **aldrig** av uppdateraren
+* Allt loggas i Loggar-fliken (UPD_CHECK/UPD_DOWNLOAD/UPD_APPLY/UPD_VERIFY)
+* Ny fil `VERSION.txt` (installerad version) — uppdateras av updateraren
+* Inga externa beroenden: standardbibliotek (`urllib`, `tarfile`, `hashlib`)
+* Kör i bakgrundstråd — GUI:t fryser inte (§9: inget terminalfönster)
+
 ### v1.2.0 — loggsystem (§8) + skärm/DPI-paket (§11)
 
 * **Komplett loggsystem** — ny flik **Loggar**:
