@@ -1,8 +1,9 @@
 """Statisk Qt-audit (alltid körbar — även i miljöer utan PySide6).
 
-folder_qt.py kan inte importeras här (PySide6 kräver libGL som sandboxen
-saknar) — därför analyseras KÄLLKODEN med AST/strängsökning. På Windows
-körs dessutom tests/test_qt_gui_offscreen som instansierar hela GUI:t.
+folder.py är sedan v1.6.0 Qt-appen (tkinter ersatt) och kan inte
+importeras här (PySide6 kräver libGL som sandboxen saknar) — därför
+analyseras KÄLLKODEN med AST/strängsökning. På Windows körs dessutom
+riktiga offscreen-Qt-tester.
 """
 
 from __future__ import annotations
@@ -12,8 +13,9 @@ import unittest
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-QT_SOURCE = (ROOT / "folder_qt.py").read_text(encoding="utf-8")
+QT_SOURCE = (ROOT / "folder.py").read_text(encoding="utf-8")
 TREE = ast.parse(QT_SOURCE)
+LAUNCHER_SOURCE = (ROOT / "folder_qt.py").read_text(encoding="utf-8")
 
 
 class FolderQtStrukturTests(unittest.TestCase):
@@ -112,6 +114,29 @@ class FolderQtStrukturTests(unittest.TestCase):
             "barcode_labels", "corner_marks", "logo_contrast", "label_type",
         ):
             self.assertIn(f'"{key}"', settings_source)
+
+    def test_folder_py_is_qt_no_tkinter_left(self) -> None:
+        """v1.6.0: tkinter är ERSATT — folder.py ska ha noll tkinter."""
+        self.assertNotIn("import tkinter", QT_SOURCE)
+        self.assertNotIn("ttkthemes", QT_SOURCE)
+        self.assertIn("PySide6", QT_SOURCE)
+        self.assertIn("QMainWindow", QT_SOURCE)
+
+    def test_combobox_selection_wired(self) -> None:
+        """Qt-sätt att binda val: currentTextChanged (inte ttk-signaler)."""
+        self.assertGreaterEqual(QT_SOURCE.count("currentTextChanged"), 2)
+
+    def test_launcher_keeps_old_paths_working(self) -> None:
+        """folder_qt.py = kompatibel startare → folder.main() (gamla
+        genvägar/autostart pekar dit)."""
+        self.assertIn("from folder import main", LAUNCHER_SOURCE)
+        self.assertIn("main()", LAUNCHER_SOURCE)
+
+    def test_requirements_declare_pyside6(self) -> None:
+        """§4: PySide6 deklarerat; tkinter-ttd-ttkthemes borttaget."""
+        req = (ROOT / "requirements.txt").read_text(encoding="utf-8")
+        self.assertIn("PySide6", req)
+        self.assertNotIn("ttkthemes", req)
 
 
 if __name__ == "__main__":

@@ -6,6 +6,26 @@ verifikatetiketter för ett helt år.
 
 ## Nya förbättringar
 
+### v1.6.0 — Qt är nu appen (tkinter ersatt)
+
+* **`folder.py` är nu Qt6-appen** (PySide6) — tkinter-versionen är
+  **ersatt**. Samma layout och alla funktioner som tidigare: flikarna
+  Generator/Hjälp/Loggar, checkrutor per rad, streckkoder, arkivindex,
+  verifikat (manad/kvartal/halvar × se/en/no), updater (REQ-K4) +
+  auto-uppdatering 00:00 varje dag
+* **Automatisk hög-DPI** (Qt6) → skarpast möjliga text på 4K/skalning (§11)
+* **QSS-design i logotypens färger** (djupblå + orange), inbyggd
+  sortering + kolumnflyttning i Loggar-tabellen (§10)
+* **Autostart vid inloggning** med `pythonw.exe` — **utan terminal** (§9);
+  skanning/konvertering körs med `CREATE_NO_WINDOW` (konsol blinkar aldrig)
+* **`folder_qt.py`** är nu en kompatibel startare (gamla genvägar och
+  autostart-poster pekar dit — de fortsätter fungera)
+* **Beroenden (§4):** `requirements.txt` — PySide6 krävs nu,
+  `ttkthemes` borttagen (tkinter-GUI:t finns inte längre). Inga andra
+  ändringar; alla Script-moduler oförändrade.
+* Kör: `python folder.py` (eller `pythonw folder.py` — utan terminal)
+* Tester: 108 st, alla gröna
+
 ### v1.5.0 — Qt6-version med samma layout + autostart + helt utan terminal
 
 * **Ny Qt6-version** (`folder_qt.py`, PySide6) — **exakt samma layout och

@@ -5,9 +5,27 @@
 <!--
 ═══════════════════════════════════════════════════════════════════════════════
   © Copyright Rickard Längkvist {get_copyright_year()} - All rights reserved
-  Specifikation v6.7 — Sammanslagen & uppdaterad
+  Specifikation v6.8 — Sammanslagen & uppdaterad
   Senast uppdaterad: 2026-11-25
   Status: AKTIV UTVECKLING
+<!--
+  v6.8 — ÄNDRINGAR (2026-11-25, v1.6.0 — Qt ersätter tkinter)
+  ───────────────────────────────────────────────────────────────
+  · folder.py = Qt6-app (PySide6) — tkinter-GUI:t ERSATT (användarens
+    beslut). Samma layout/funktioner; MainWindow ersätter LabelGUI.
+  · folder_qt.py = kompatibel startare (from folder import main) —
+    gamla genvägar/autostart-poster pekar dit och fortsätter fungera.
+  · Script/autostart.py: default-skript folder_qt.py → folder.py.
+  · requirements.txt: PySide6>=6.6 krävs; ttkthemes BORTTAGEN (§4 —
+    meddelas i release).
+  · tests/test_gui_statik.py (ttk-AST-vakt) borttagen — folder.py är Qt;
+    test_qt_statik.py pekar nu på folder.py + nya vakter (ingen tkinter
+    kvar, launcher, currentTextChanged, requirements).
+  · test_nya_funktioner: smoke-tester vakt med PySide6.QtWidgets-import
+    (sandbox saknar libGL → skip; Windows kör riktigt).
+  · Tester: 108 totalt.
+-->
+
 <!--
   v6.7 — ÄNDRINGAR (2026-11-25, v1.5.0 — Qt6-version + autostart)
   ───────────────────────────────────────────────────────────────

@@ -39,9 +39,9 @@ def build_autostart_command(
     python_exe: Optional[str] = None,
     script_path: Optional[str] = None,
 ) -> str:
-    """Kommandoraden för autostart: '"pythonw.exe" "folder_qt.py"'."""
+    """Kommandoraden för autostart: '"pythonw.exe" "folder.py"'."""
     script = Path(script_path or (Path(__file__).resolve().parent.parent
-                                  / "folder_qt.py"))
+                                  / "folder.py"))
     return f'"{resolve_pythonw(python_exe)}" "{script}"'
 
 

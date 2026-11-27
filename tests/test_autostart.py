@@ -135,17 +135,30 @@ class NoConsoleTests(unittest.TestCase):
 
 
 class FolderPyBootstrapTests(unittest.TestCase):
-    """folder.py + folder_qt.py ska skydda print före allt annat (§9)."""
+    """folder.py (Qt) ska skydda print före allt annat (§9);
+    folder_qt.py är den kompatibla startaren som anropar folder.main()."""
 
-    def test_both_mains_call_guard_first(self) -> None:
-        for name in ("folder.py", "folder_qt.py"):
-            source = (Path(__file__).resolve().parent.parent / name).read_text(
-                encoding="utf-8"
-            )
-            self.assertIn(
-                "ensure_no_console_streams()", source,
-                f"{name} saknar pythonw-skydd",
-            )
+    def test_folder_py_calls_guard_first(self) -> None:
+        source = (Path(__file__).resolve().parent.parent / "folder.py").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("ensure_no_console_streams()", source)
+        self.assertLess(
+            source.find("ensure_no_console_streams()"),
+            source.find("from Script import ("),
+        )
+
+    def test_folder_qt_launcher_imports_folder(self) -> None:
+        source = (Path(__file__).resolve().parent.parent / "folder_qt.py").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("from folder import main", source)
+
+    def test_autostart_default_targets_folder_py(self) -> None:
+        command = autostart.build_autostart_command(
+            python_exe="C:\\Py\\python.exe", script_path=None
+        )
+        self.assertIn("folder.py", command)
 
 
 if __name__ == "__main__":

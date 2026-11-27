@@ -309,42 +309,47 @@ class SettingsNyaNycklarTests(unittest.TestCase):
             )
 
 
-def _tkinter_available() -> bool:
-    """True om tkinter kan importeras (sandlåda kan sakna det)."""
+def _pyside6_available() -> bool:
+    """True om PySide6.QtWidgets verkligen kan importeras.
+
+    Sandlådan har PySide6-paketet men saknar libGL — import av
+    QtWidgets misslyckas där. På Windows med requirements installerat
+    fungerar det alltid.
+    """
     try:
-        import tkinter  # noqa: F401
+        from PySide6.QtWidgets import QApplication  # noqa: F401
         return True
-    except ImportError:
+    except Exception:
         return False
 
 
 class FolderImportSmokeTest(unittest.TestCase):
-    """folder.py ska kunna importeras utan display (GUI skapas först vid start).
+    """folder.py (Qt sedan v1.6.0) ska kunna importeras utan display.
 
-    Testerna hoppar över om tkinter saknas (t.ex. minimal sandbox-Python) —
-    på användarens maskin med normal Python körs de alltid.
+    Testerna hoppar över om PySide6 saknas (t.ex. sandboxen) — på
+    användarens maskin med requirements installerade körs de alltid.
     """
 
-    @unittest.skipUnless(_tkinter_available(), "tkinter saknas i miljön")
+    @unittest.skipUnless(_pyside6_available(), "PySide6 saknas i miljön")
     def test_folder_imports_cleanly(self) -> None:
         module = importlib.import_module("folder")
-        self.assertTrue(hasattr(module, "LabelGUI"))
+        self.assertTrue(hasattr(module, "MainWindow"))
         self.assertTrue(hasattr(module, "ArkivindexModule"))
         self.assertTrue(hasattr(module, "BarcodeModule"))
         # Hjälpfunktioner för checkrutor/streckkoder finns.
         gui_funcs = (
-            module.LabelGUI._included_texts,
-            module.LabelGUI._barcode_text_for,
-            module.LabelGUI.create_arkivindex_pdf,
+            module.MainWindow._included_texts,
+            module.MainWindow._barcode_text_for,
+            module.MainWindow.create_arkivindex_pdf,
         )
         self.assertTrue(all(callable(func) for func in gui_funcs))
 
-    @unittest.skipUnless(_tkinter_available(), "tkinter saknas i miljön")
+    @unittest.skipUnless(_pyside6_available(), "PySide6 saknas i miljön")
     def test_barcode_text_extraction_logic(self) -> None:
-        """_barcode_text_for körs utan Tk-instans via klassens __func__."""
+        """_barcode_text_for körs utan Qt-instans via klassens __func__."""
         import folder
 
-        method = folder.LabelGUI._barcode_text_for
+        method = folder.MainWindow._barcode_text_for
 
         class _FakeGUI:
             _barcode_text_for = method
