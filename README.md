@@ -1,10 +1,28 @@
 # Pärmetikett Generator
 
-Ett litet Tkinter-program som skriver utskriftsklara PDF-etiketter för pärmar
-och arkivering: ryggetiketter (41×64 mm / 57×64 mm), indexetiketter och
-verifikatetiketter för ett helt år.
+En gratis, reklamfri Qt6-app (PySide6) som skriver utskriftsklara
+PDF-etiketter för pärmar och arkivering: ryggetiketter (41×64 mm /
+57×64 mm), indexetiketter och verifikatetiketter för ett helt år.
 
 ## Nya förbättringar
+
+### v1.7.0 — menyer (Uppdatera + Hjälp & Stöd) + stöd-meny à la TaskBord
+
+* **Ny menybar**:
+  * **Uppdatera**: "⬇️ Sök uppdatering nu (REQ-K4)", "🕒 Auto-uppdatering
+    00:00 varje dag" (av/på — synkad med checkboxen), "📂 Öppna Export-mappen"
+  * **Hjälp & Stöd**: "🚀 Autostart vid inloggning" (av/på — synkad),
+    **💖 Stöd Pärmetikett Generator…** → Donera via PayPal / Bjud på en
+    kaffe via Ko-fi / ⭐ Ge en stjärna på GitHub, "🐞 Rapportera fel /
+    förslag", "🌐 GitHub-projektet", "ℹ️ Om Pärmetikett Generator"
+    (version + stödinfo)
+* **Högerklick på fönstret** → 💖 Stöd … + uppdatering + Om
+  (samma mönster som TaskBord)
+* Donationslänkar öppnas i **standardwebbläsaren**; appen hanterar aldrig
+  betalningsuppgifter
+* **SUPPORT.md** tillagd (stöd/hjälp-dokument anpassad till appen) och
+  länkad från README; Hjälp-fliken har en STÖD-sektion
+* Tester: 8 nya vakttester för menyer/stöd — **116 st totalt**
 
 ### v1.6.0 — Qt är nu appen (tkinter ersatt)
 
@@ -171,6 +189,22 @@ verifikatetiketter för ett helt år.
 * **Robustare PDF-generering** — korrekt typsnittsfallback, bättre
   radbrytning av långa ord, sidbrytning som aldrig ritar utanför arket och
   ett enda ställe för all logotyphantering (`Script/logotyp.py`).
+
+## Stöd Pärmetikett Generator
+
+Appen är gratis och reklamfri — donationer är helt frivilliga och låser
+inte upp några extra funktioner. Du hittar länkarna i appen via
+**Högerklicka → 💖 Stöd Pärmetikett Generator…** eller menyn
+**Hjälp & Stöd**:
+
+| Tjänst | Länk |
+| --- | --- |
+| PayPal | [Donera via PayPal](https://paypal.me/Rickard3dPrint) |
+| Ko-fi | [Bjud på en kaffe via Ko-fi](https://ko-fi.com/tokke2) |
+
+Hjälp till utan att donera: ge [projektet en stjärna på GitHub](https://github.com/Tokke2/P-rm),
+rapportera fel/förslag i [Issues](https://github.com/Tokke2/P-rm/issues)
+eller dela projektet. Läs mer i [SUPPORT.md](SUPPORT.md).
 
 ## Installation
 

@@ -90,6 +90,14 @@ ASSETS_FOLDER = Path(__file__).parent / "assets"
 APP_LOGOTYP_SVG = ASSETS_FOLDER / "app_logotyp.svg"
 APP_LOGOTYP_ICON = ASSETS_FOLDER / "app_logotyp_512.png"
 
+# Stöd (frivilligt — appen är gratis och reklamfri, inga konton krävs)
+SUPPORT_LINKS = (
+    ("Donera via PayPal", "https://paypal.me/Rickard3dPrint"),
+    ("Bjud på en kaffe via Ko-fi", "https://ko-fi.com/tokke2"),
+)
+GITHUB_PROJECT = "https://github.com/Tokke2/P-rm"
+GITHUB_ISSUES = GITHUB_PROJECT + "/issues"
+
 VALID_LABEL_TYPES = {"rygg_smal", "rygg_tjock", "index"}
 
 LOGO_FILE_FILTER = (
@@ -224,6 +232,8 @@ class MainWindow(QMainWindow):
         self._build_generator_tab()
         self._build_help_tab()
         self._build_logg_tab()
+        self._build_menus()
+        self._build_context_menu()
 
         # Statusrad
         status = QLabel(
@@ -258,6 +268,120 @@ class MainWindow(QMainWindow):
         ).start()
         if self.auto_update_checkbox.isChecked():
             self._schedule_auto_update()
+
+    # ──────────────────────────────────────────────────────
+    # MENYER — Uppdatera + Hjälp & Stöd (TaskBord-mönstret)
+    # ──────────────────────────────────────────────────────
+
+    def _build_menus(self) -> None:
+        """Menybar: Uppdatera (REQ-K4) + Hjälp & Stöd (donationer m.m.)."""
+        menu_bar = self.menuBar()
+
+        # ── Uppdatera ────────────────────────────────────
+        upd_menu = menu_bar.addMenu("&Uppdatera")
+        act_check = QAction("⬇️ Sök uppdatering nu (REQ-K4)", self)
+        act_check.triggered.connect(self.check_updates_clicked)
+        upd_menu.addAction(act_check)
+
+        # Toggle-action dubbelbinds till checkboxen (ensam sanningskälla
+        # är checkboxen — Qt emitterar toggled endast vid ändring, så
+        # dubbelbindningen avslutar sig själv).
+        self.act_auto_update = QAction(
+            "🕒 Auto-uppdatering 00:00 varje dag", self
+        )
+        self.act_auto_update.setCheckable(True)
+        self.act_auto_update.setChecked(self.auto_update_checkbox.isChecked())
+        upd_menu.addAction(self.act_auto_update)
+        self.act_auto_update.toggled.connect(
+            self.auto_update_checkbox.setChecked
+        )
+        self.auto_update_checkbox.toggled.connect(
+            self.act_auto_update.setChecked
+        )
+
+        act_autostart_menu = upd_menu.addAction("📂 Öppna Export-mappen")
+        act_autostart_menu.triggered.connect(self.open_export_folder)
+
+        # ── Hjälp & Stöd ─────────────────────────────────
+        help_menu = menu_bar.addMenu("&Hjälp & Stöd")
+
+        self.act_autostart = QAction(
+            "🚀 Autostart vid inloggning (utan terminal)", self
+        )
+        self.act_autostart.setCheckable(True)
+        self.act_autostart.setChecked(self.autostart_checkbox.isChecked())
+        help_menu.addAction(self.act_autostart)
+        self.act_autostart.toggled.connect(
+            self.autostart_checkbox.setChecked
+        )
+        self.autostart_checkbox.toggled.connect(
+            self.act_autostart.setChecked
+        )
+
+        help_menu.addSeparator()
+        support_menu = help_menu.addMenu("💖 Stöd Pärmetikett Generator…")
+        self._fill_support_menu(support_menu)
+
+        act_project = help_menu.addAction("🌐 GitHub-projektet")
+        act_project.triggered.connect(
+            lambda: self._open_link(GITHUB_PROJECT)
+        )
+        act_issues = help_menu.addAction("🐞 Rapportera fel / förslag")
+        act_issues.triggered.connect(lambda: self._open_link(GITHUB_ISSUES))
+        help_menu.addSeparator()
+        act_about = help_menu.addAction("ℹ️ Om Pärmetikett Generator")
+        act_about.triggered.connect(self._show_about)
+
+    def _fill_support_menu(self, menu: QMenu) -> None:
+        """Donations-/stödval — öppnas i standardwebbläsaren."""
+        for text, url in SUPPORT_LINKS:
+            action = menu.addAction(text)
+            action.triggered.connect(
+                lambda _checked=False, u=url: self._open_link(u)
+            )
+        menu.addSeparator()
+        star = menu.addAction("⭐ Ge en stjärna på GitHub")
+        star.triggered.connect(
+            lambda: self._open_link(GITHUB_PROJECT)
+        )
+
+    def _build_context_menu(self) -> None:
+        """Högerklick på fönstret → Stöd + uppdatering (TaskBord-mönstret)."""
+        self.setContextMenuPolicy(Qt.CustomContextMenu)
+        self.customContextMenuRequested.connect(self._show_context_menu)
+
+    def _show_context_menu(self, pos) -> None:
+        menu = QMenu(self)
+        support = menu.addMenu("💖 Stöd Pärmetikett Generator…")
+        self._fill_support_menu(support)
+        menu.addSeparator()
+        check = menu.addAction("⬇️ Sök uppdatering nu (REQ-K4)")
+        check.triggered.connect(self.check_updates_clicked)
+        about = menu.addAction("ℹ️ Om Pärmetikett Generator")
+        about.triggered.connect(self._show_about)
+        menu.exec(self.mapToGlobal(pos))
+
+    def _open_link(self, url: str) -> None:
+        """Öppnar en länk i standardwebbläsaren (loggas i apploggen)."""
+        QDesktopServices.openUrl(QUrl(url))
+        LoggModule.logg.log_app(f"Länk öppnad: {url}")
+
+    def _show_about(self) -> None:
+        version = UpdaterModule.read_installed_version()
+        links = "\n".join(
+            f"{text}: {url}" for text, url in SUPPORT_LINKS
+        )
+        QMessageBox.about(
+            self,
+            "Om Pärmetikett Generator",
+            f"Pärmetikett Generator {version}\n"
+            f"Qt6 (PySide6) · {get_copyright_notice()}\n\n"
+            "Appen är gratis och reklamfri. Du behöver inte donera,\n"
+            "skapa något konto eller teckna någon prenumeration.\n"
+            "Donationer är frivilliga och låser inte upp extra funktioner.\n\n"
+            f"{links}\n\n"
+            f"Projekt: {GITHUB_PROJECT}",
+        )
 
     # ──────────────────────────────────────────────────────
     # GENERATOR-FLIK (samma layout: vänsterpanel + etiketter)
@@ -570,6 +694,17 @@ AUTOSTART (§9):
   • 'Autostart vid inloggning' startar appen automatiskt med
     pythonw.exe — INGET terminalfönster, varken vid start eller
     skanning
+
+STÖD (frivilligt — appen är gratis och reklamfri):
+  • Högerklicka på fönstret → '💖 Stöd Pärmetikett Generator…'
+    eller menyn 'Hjälp & Stöd'
+  • Donera via PayPal (paypal.me/Rickard3dPrint) eller bjud på en
+    kaffe via Ko-fi (ko-fi.com/tokke2) — länken öppnas i din
+    standardwebbläsare; kontrollera mottagare och belopp hos
+    betaltjänsten innan du bekräftar
+  • Appen hanterar inga kort- eller betalningsuppgifter
+  • Hjälp till utan att donera: ge stjärna på GitHub, rapportera
+    fel/förslag (Issues), dela projektet — se SUPPORT.md
 
 SKÄRM & SKÄRPA (§11):
   • Qt6 skalar automatiskt för hög-DPI → skarp text på 4K

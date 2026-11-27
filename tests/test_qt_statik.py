@@ -139,5 +139,59 @@ class FolderQtStrukturTests(unittest.TestCase):
         self.assertNotIn("ttkthemes", req)
 
 
+class MenyOchStodTests(unittest.TestCase):
+    """Menyer (Uppdatera + Hjälp & Stöd) + TaskBord-mönstret för stöd."""
+
+    def test_menus_exist(self) -> None:
+        self.assertIn('addMenu("&Uppdatera")', QT_SOURCE)
+        self.assertIn('addMenu("&Hjälp & Stöd")', QT_SOURCE)
+
+    def test_support_menu_and_links(self) -> None:
+        self.assertIn("Stöd Pärmetikett Generator…", QT_SOURCE)
+        self.assertIn("paypal.me/Rickard3dPrint", QT_SOURCE)
+        self.assertIn("ko-fi.com/tokke2", QT_SOURCE)
+        self.assertIn("github.com/Tokke2/P-rm", QT_SOURCE)
+
+    def test_support_opens_in_browser(self) -> None:
+        # Länkar öppnas i standardwebbläsaren (QDesktopServices), inte
+        # i appen — TaskBord-mönstret.
+        self.assertIn("QDesktopServices.openUrl", QT_SOURCE)
+
+    def test_context_menu_on_window(self) -> None:
+        self.assertIn("customContextMenuRequested", QT_SOURCE)
+        self.assertIn("_show_context_menu", QT_SOURCE)
+
+    def test_menu_syncs_with_checkboxes(self) -> None:
+        # Toggle-actions dubbelbinds till checkboxarna (ensam sanningskälla).
+        self.assertIn("self.act_auto_update.setChecked", QT_SOURCE)
+        self.assertIn("self.act_autostart.setChecked", QT_SOURCE)
+
+    def test_about_shows_version(self) -> None:
+        self.assertIn("read_installed_version", QT_SOURCE)
+        self.assertIn("Om Pärmetikett Generator", QT_SOURCE)
+
+    def test_support_md_exists_and_adapted(self) -> None:
+        support_path = ROOT / "SUPPORT.md"
+        self.assertTrue(support_path.is_file())
+        text = support_path.read_text(encoding="utf-8")
+        for fragment in (
+            "Stöd Pärmetikett Generator",
+            "paypal.me/Rickard3dPrint",
+            "ko-fi.com/tokke2",
+            "github.com/Tokke2/P-rm",
+            "gratis, reklamfri",
+            "Betalning och integritet",
+        ):
+            self.assertIn(fragment, text)
+        # Mallens TaskBord-egennamn ska vara bortanpassade:
+        self.assertNotIn("TaskBord", text)
+        self.assertNotIn("Thunderbird", text)
+
+    def test_readme_links_support_md(self) -> None:
+        readme = (ROOT / "README.md").read_text(encoding="utf-8")
+        self.assertIn("SUPPORT.md", readme)
+        self.assertIn("Stöd Pärmetikett Generator", readme)
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -5,9 +5,27 @@
 <!--
 ═══════════════════════════════════════════════════════════════════════════════
   © Copyright Rickard Längkvist {get_copyright_year()} - All rights reserved
-  Specifikation v6.8 — Sammanslagen & uppdaterad
+  Specifikation v6.9 — Sammanslagen & uppdaterad
   Senast uppdaterad: 2026-11-25
   Status: AKTIV UTVECKLING
+<!--
+  v6.9 — ÄNDRINGAR (2026-11-25, v1.7.0 — menyer + stöd à la TaskBord)
+  ───────────────────────────────────────────────────────────────
+  · folder.py: menybar — "Uppdatera" (sök upd nu, auto-upd 00:00
+    toggle synkad med checkbox, export-mapp) och "Hjälp & Stöd"
+    (autostart toggle synkad, Stöd-submeny: PayPal/Ko-fi/GitHub-stjärna,
+    rapportera fel, GitHub-projekt, Om-dialog med VERSION).
+  · Högerklick-kontextmeny på fönstret: Stöd + uppdatering + Om
+    (Qt.CustomContextMenu).
+  · Länkar öppnas via QDesktopServices (standardwebbläsaren); loggas i
+    apploggen. SUPPORT_LINKS/GITHUB_PROJECT/GITHUB_ISSUES-konstanter.
+  · SUPPORT.md tillagd (TaskBord-mallen anpassad: Pärmetikett Generator,
+    P-rm-repo, samma donationslänkar, ingen MIT-claim — copyright-kod
+    oförändrad) + länkad från README + STÖD-sektion i Hjälp-fliken.
+  · Tester: 8 nya vakttester (menystruktur, länkar, kontextmeny, synk,
+    Om, SUPPORT.md) — 116 totalt.
+-->
+
 <!--
   v6.8 — ÄNDRINGAR (2026-11-25, v1.6.0 — Qt ersätter tkinter)
   ───────────────────────────────────────────────────────────────
